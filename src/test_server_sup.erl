@@ -14,6 +14,7 @@
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
+-include("../include/server.hrl").
 
 %%====================================================================
 %% API functions
@@ -31,7 +32,12 @@ start_link() ->
 %% Before OTP 18 tuples must be used to specify a child. e.g.
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-    {ok, {{one_for_all, 0, 1}, []}}.
+    {ok, _} = ranch:start_listener(user_process,
+        ranch_tcp, [{port, ?TCP_PORT}], user_process, []),
+%%    Child1 = #{id => tcp,
+%%        start => {tcp_server, start_link, []},
+%%        shutdown => brutal_kill},
+    {ok, {{one_for_all, 3, 10}, []}}.
 
 %%====================================================================
 %% Internal functions
