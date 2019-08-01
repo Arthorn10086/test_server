@@ -8,9 +8,10 @@
                 kernel,
                 stdlib,
                 sasl,
-                ranch
+                ranch,
+                mysql_poolboy
             ]},
-        {env, []},
+        {env, [{cfg_path, "./cfg"}, {port, 7620}]},
         {modules, []},
 
         {licenses, ["Apache 2.0"]},

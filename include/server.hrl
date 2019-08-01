@@ -1,1 +1,1 @@
--define(TCP_PORT, 7620).
+-define(POOLNAME, sqlPool1).

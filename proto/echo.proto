@@ -1,0 +1,5 @@
+//心跳包
+message HeartBeatReq {}
+message HeartBeatResp {
+  required uint64 now_ms = 1;
+}

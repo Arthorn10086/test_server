@@ -1,0 +1,19 @@
+
+//登录
+message LoginReq{
+required string user =1;
+required string password =2;
+}
+message loginResp{
+required uint64 now_ms = 1;
+repeated RoleInfo role_info = 2;
+}
+
+/*内部声明*/
+message RoleInfo {
+    required uint64 role_uid = 1; //角色uid
+    required string role_name = 2; //角色名
+    required uint32 role_lv = 3;  //角色等级
+    required uint32 profession = 4; //职业
+    required uint32 figure = 5;  //角色模型
+}
