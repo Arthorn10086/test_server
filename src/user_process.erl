@@ -18,7 +18,7 @@
 -define(SERVER, ?MODULE).
 -define(TIMEOUT, 5000).
 
--record(state, {socket, transport}).
+-record(state, {socket, transport, attr = [], run = [], echo}).
 
 %%%===================================================================
 %%% API
@@ -54,7 +54,7 @@ start_link(Ref, Socket, Transport, Opts) ->
 
 init({Ref, Socket, Transport, _Opts = []}) ->
     ok = ranch:accept_ack(Ref),
-    register(test_user,self()),
+    register(test_user, self()),
     ok = Transport:setopts(Socket, [{active, once}]),
     gen_server:enter_loop(?MODULE, [],
         #state{socket = Socket, transport = Transport},
@@ -105,8 +105,9 @@ handle_cast(_Request, State) ->
     {noreply, NewState :: #state{}} |
     {noreply, NewState :: #state{}, timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: #state{}}).
-handle_info({tcp, Socket, Data}, #state{socket = Socket, transport = Transport} = State) ->
+handle_info({tcp, Socket, Bin}, #state{socket = Socket, transport = Transport} = State) ->
     Transport:setopts(Socket, [{active, once}]),
+    protocol_routing:route(Socket, Transport, Bin),
     {noreply, State, ?TIMEOUT};
 handle_info({tcp_closed, Socket, Data}, #state{socket = Socket, transport = Transport} = State) ->
     {noreply, normal, ?TIMEOUT};

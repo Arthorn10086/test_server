@@ -11,7 +11,7 @@
                 ranch,
                 mysql_poolboy
             ]},
-        {env, [{cfg_path, "./cfg"}, {port, 7620}]},
+        {env, [{cfg_path, "./config"}, {port, 7620}]},
         {modules, []},
 
         {licenses, ["Apache 2.0"]},
