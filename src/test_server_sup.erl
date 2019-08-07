@@ -45,10 +45,18 @@ init([]) ->
     Child3 = #{id => server_timer,
         start => {server_timer, start_link, []},
         shutdown => brutal_kill},
-    Child4 = #{id => file_monitor,
+    Child4 = #{id => server_db_sup,
+        start => {server_db_sup, start_link, []},
+        shutdown => brutal_kill,
+        type => supervisor},
+    Child5 = #{id => server_db,
+        start => {server_db, start_link, []},
+        shutdown => brutal_kill},
+    Child6 = #{id => file_monitor,
         start => {file_monitor, start_link, [Path]},
         shutdown => brutal_kill},
-    {ok, {{one_for_all, 3, 10}, [Child1, Child2, Child3, Child4]}}.
+
+    {ok, {{one_for_all, 3, 10}, [Child1, Child2, Child3, Child4, Child5, Child6]}}.
 
 %%====================================================================
 %% Internal functions
