@@ -6,7 +6,7 @@
 
 
 %%%=======================EXPORT=======================
--export([encode/3, decode/1, encode_reply/2, route/3]).
+-export([encode/3, decode/1, encode_reply/3, route/4]).
 
 %%%=======================INCLUDE======================
 
@@ -27,33 +27,36 @@
 encode(Protocol, Serial, Data) ->
     jsx:encode([{<<"cmd">>, Protocol}, {<<"serial">>, Serial}, {<<"data">>, Data}]).
 decode(Bin) ->
-    jsx:decode(Bin).
-encode_reply(Status, Data) ->
-    jsx:encode([{<<"status">>, Status}, {<<"data">>, Data}]).
+    [{binary:bin_to_list(K), V} || {K, V} <- jsx:decode(Bin)].
+encode_reply(Status, Serial, Data) ->
+    jsx:encode([{<<"status">>, Status}, {<<"serial">>, Serial}, {<<"data">>, Data}]).
+
+
 %% ----------------------------------------------------
 %% @doc  
 %%      路由
 %% @end
 %% ----------------------------------------------------
-route(Socket, Transport, Bin) ->
-    try
-        Json = decode(Bin),
-        {_, Cmd} = lists:keyfind(<<"cmd">>, 1, Json),
-        {_, MFAList, {LogM, LogF, LogA}, Timeout} = config_lib:get('tcp_protocol', Cmd),
-        {Pid, Ref} = spawn_monitor(fun() ->
-            try
-                %%TODO
-                handle_mfa(MFAList, Transport, Socket)
-            catch
-                E1:E2 ->
-                    LogM:LogF(LogA, E1, E2, erlang:get_stacktrace())
-            end
-        end),
-        {Pid, Ref, Timeout}
-    catch
-        _:_ ->
-            encode_reply(error, erlang:get_stacktrace())
-    end.
+route(Session, Attr, Bin, MS) ->
+    Parent = self(),
+    Msg = decode(Bin),
+    {_, Cmd} = lists:keyfind("cmd", 1, Msg),
+    {_, Serial} = lists:keyfind("serial", 1, Msg),
+    {_, MFAList, {LogM, LogF, LogA}, Timeout} = config_lib:get('tcp_protocol', Cmd),
+    {Pid, Ref} = spawn_monitor(fun() ->
+        try
+            {Status, AddAttr, Reply} = handle_mfa(MFAList, Session, Attr, Msg),
+            Data = encode_reply(Status, Serial, Reply),
+            user_process:add_attr(Parent, AddAttr),
+            user_process:send(Session, Data)
+        catch
+            E1:E2 ->
+                LogM:LogF(LogA ++ [{E1, E2, xmerl_ucs:to_utf8(erlang:get_stacktrace())}]),
+                Error = encode_reply(error, Serial, erlang:get_stacktrace()),
+                user_process:send(Session, Error)
+        end
+    end),
+    user_process:add_run(Session, Pid, Ref, Cmd, MS , Timeout).
 
 
 %%%===================LOCAL FUNCTIONS==================
@@ -62,3 +65,14 @@ route(Socket, Transport, Bin) ->
 %%  
 %% @end
 %% ----------------------------------------------------
+handle_mfa(MFAL, Session, Attr, Msg) ->
+    handle_mfa(MFAL, Session, Attr, Msg, []).
+handle_mfa([], _Session, _Attr, Msg, AddAttr) ->
+    {ok, AddAttr, Msg};
+handle_mfa([{M, F, A} | T], Session, Attr, Msg, AddAttr) ->
+    case M:F(A, Session, Attr, Msg) of
+        {break, AddList, Reply} ->
+            {ok, AddList, Reply};
+        {ok, AddList, NMsg} ->
+            handle_mfa(T, Session, AddList ++ Attr, NMsg, AddList ++ AddAttr)
+    end.
