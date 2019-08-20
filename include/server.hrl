@@ -1,1 +1,3 @@
 -define(POOLNAME, sqlPool1).
+-define(POOLNAME2, sqlPool2).
+-define(DBNAME, test).
