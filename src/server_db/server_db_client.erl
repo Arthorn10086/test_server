@@ -5,7 +5,7 @@
 -author("yhw").
 
 %%%=======================EXPORT=======================
--export([get/3, get/5, update/3, update/7, delete/2, delete/4]).
+-export([get/3, get/5, update/3, update/7, delete/2, delete/4, transaction/3, transaction/5, write/4]).
 
 %%%=======================INCLUDE======================
 
@@ -22,7 +22,7 @@
 %%%=================EXPORTED FUNCTIONS=================
 %% ----------------------------------------------------
 %% @doc
-%%
+%%      读
 %% @end
 %% ----------------------------------------------------
 get(TableName, Key, Default) ->
@@ -49,7 +49,7 @@ get(TableName, Key, Default, LockTime, TimeOut) ->
     end.
 %% ----------------------------------------------------
 %% @doc
-%%
+%%      修改
 %% @end
 %% ----------------------------------------------------
 update(TableName, Key, Value) ->
@@ -86,7 +86,7 @@ update(TableName, Key, Fun, Default, FunArgs, LockTime, TimeOut) ->
 
 %% ----------------------------------------------------
 %% @doc
-%%
+%%      锁/LockTime 0 解锁
 %% @end
 %% ----------------------------------------------------
 lock(TableName, Key, LockTime, TimeOut) ->
@@ -111,7 +111,7 @@ lock(TableName, Key, LockTime, TimeOut) ->
     end.
 %% ----------------------------------------------------
 %% @doc
-%%
+%%      删除
 %% @end
 %% ----------------------------------------------------
 delete(TableName, Key) ->
@@ -136,23 +136,53 @@ delete(TableName, Key, LockTime, TimeOut) ->
             throw({'error', Err, TableName, Key})
     end,
     ok.
+
 %% ----------------------------------------------------
 %% @doc
-%%
+%%      写
 %% @end
 %% ----------------------------------------------------
-%%transaction(TableKeys, MFA, Args) ->
-%%    transaction(TableKeys, MFA, Args, ?LOCKTIMEOUT, ?TIMEOUT).
-%%transaction(TableKeys, MFA, Args, LockTime, TimeOut) ->
-%%    TableIdKeys = [{server_db_lib:get_db_name(TableName), Key, Default} || {TableName, Key, Default} <- TableKeys],
-%%
-%%
-%%    ok.
+write(TableName, Key, Value, Vsn) ->
+    ID = server_db_lib:get_db_name(TableName),
+    SendInfo = format_send({'update', Key, Value, Vsn}),
+    gen_server:call(ID, SendInfo).
+%% ----------------------------------------------------
+%% @doc
+%%      事务
+%% @end
+%% ----------------------------------------------------
+transaction(TableKeys, MFA, Args) ->
+    transaction(TableKeys, MFA, Args, ?LOCKTIMEOUT, ?TIMEOUT).
+transaction(TableKeys, MFA, Args, LockTime, TimeOut) ->
+    Ref = make_ref(),
+    TableKeyL = [{TableName, Key} || {TableName, Key, _Default} <- TableKeys],
+    transaction_send(TableKeys, Ref, LockTime, TimeOut),
+    case transaction_receive(TableKeyL, Ref, []) of
+        {ok, TableKeyVs} ->
+            case catch transaction_(MFA, Args, TableKeys, TableKeyVs) of
+                {'error', Err1} ->
+                    throw({Err1, MFA, TableKeyVs, Args});
+                Reply ->
+                    try transaction_after(Reply, TableKeyVs) of
+                        {'error', Err} ->
+                            throw({Err, Reply, MFA, TableKeyVs, Args});
+                        {ok, Msg} ->
+                            Msg
+                    catch
+                        _E1:E2 ->
+                            throw({'transaction_after', E2, Reply, MFA, TableKeyVs, Args})
+                    after
+                        transaction_unlock(TableKeyL)
+                    end
+            end;
+        {'error', Error} ->
+            throw({'lock_error', Error})
+    end.
 
 %%%===================LOCAL FUNCTIONS==================
 %% ----------------------------------------------------
 %% @doc  
-%%
+%%      format
 %% @end
 %% ----------------------------------------------------
 format_send({'get', Key, LockTime}) ->
@@ -163,3 +193,80 @@ format_send({'update', Key, Value, Vsn}) ->
     {'update', Key, Value, Vsn, 0, self()};
 format_send({'delete', Key, Vsn}) ->
     {'delete', Key, 'ingore', Vsn, 0, self()}.
+
+%% ----------------------------------------------------
+%% @doc
+%%      事务辅助函数
+%% @end
+%% ----------------------------------------------------
+transaction_send(TableKeys, Ref, LockTime, TimeOut) ->
+    P = self(),
+    lists:foreach(fun({TableName, Key, Default}) -> spawn(fun() ->
+        case catch get(TableName, Key, Default, LockTime, TimeOut) of
+            {ok, V, Vsn, _T} ->
+                P ! {Ref, TableName, Key, V, Vsn};
+            _ ->
+                P ! {Ref, TableName, Key, 'lock_error'}
+        end
+    end) end, TableKeys).
+
+transaction_receive(TableKeys, Ref, RcvL) ->
+    receive
+        {Ref, TableName, Key, V, Vsn} ->
+            NRcvL = [{{TableName, Key}, V, Vsn} | RcvL],
+            case lists:delete({TableName, Key}, TableKeys) of
+                [] ->
+                    {'ok', NRcvL};
+                NL ->
+                    transaction_receive(NL, Ref, NRcvL)
+            end;
+        {Ref, TableName, Key, 'lock_error'} ->
+            {'error', {TableName, Key}};
+        _ ->
+            transaction_receive(TableKeys, Ref, RcvL)
+    end.
+
+
+transaction_(MFA, Args, TableKeys, TableKeyVs) ->
+    TableKeyValues = lists:reverse(lists:foldl(fun({TableName, Key, _}, R) ->
+        {_, V, _Vsn} = lists:keyfind({TableName, Key}, 1, TableKeyVs),
+        [{{TableName, Key}, V} | R]
+    end, [], TableKeys), []),
+    case MFA of
+        {M, F, A} ->
+            M:F(A, Args, TableKeyValues);
+        Fun when is_function(Fun, 2) ->
+            Fun(Args, TableKeyValues);
+        _ ->
+            {'error', 'transaction_fun_error'}
+    end.
+
+
+transaction_after(Reply, TableKeyVs) ->
+    case Reply of
+        {ok, Msg} ->
+            {ok, Msg};
+        {ok, Msg, UpdateL} ->
+            handle_update(TableKeyVs, UpdateL),
+            {ok, Msg};
+        {ok, Msg, UpdateL, AddL} ->
+            handle_update(TableKeyVs, UpdateL),
+            handle_add(AddL),
+            {ok, Msg};
+        _ ->
+            {error, 'transaction_fun_bad_return'}
+    end.
+
+handle_update(TableKeyVs, UpdateL) ->
+    lists:foreach(fun({{Tab, Key}, V}) ->
+        {_, _, Vsn} = lists:keyfind({Tab, Key}, 1, TableKeyVs),
+        write(Tab, Key, V, Vsn)
+    end, UpdateL).
+handle_add(AddL) ->
+    lists:foreach(fun({Tab, Key, V}) ->
+        write(Tab, Key, V, 0)
+    end, AddL).
+transaction_unlock(TableKeyL) ->
+    lists:foreach(fun({TableName, Key}) ->
+        lock(TableName, Key, 0, ?TIMEOUT)
+    end, TableKeyL).
