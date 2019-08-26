@@ -7,10 +7,25 @@
 
 -define(login_pb_gpb_version, "4.10.0").
 
+-ifndef('REGREQ_PB_H').
+-define('REGREQ_PB_H', true).
+-record('RegReq',
+        {user                   :: non_neg_integer(), % = 1, 32 bits
+         password               :: iodata()         % = 2
+        }).
+-endif.
+
+-ifndef('REGRESP_PB_H').
+-define('REGRESP_PB_H', true).
+-record('RegResp',
+        {status                 :: non_neg_integer() % = 1, 32 bits
+        }).
+-endif.
+
 -ifndef('LOGINREQ_PB_H').
 -define('LOGINREQ_PB_H', true).
 -record('LoginReq',
-        {user                   :: iodata(),        % = 1
+        {user                   :: non_neg_integer(), % = 1, 32 bits
          password               :: iodata()         % = 2
         }).
 -endif.

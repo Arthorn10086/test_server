@@ -6,6 +6,7 @@
 
 %% API
 -export([start_link/4, send/2, add_attr/2]).
+-export([set_attr/2, set_echo/2]).
 -export([add_run/6]).
 
 %% gen_server callbacks
@@ -38,10 +39,15 @@ start_link(Ref, Socket, Transport, Opts) ->
 
 send(#state{socket = Socket, transport = Transport}, Data) ->
     Transport:send(Socket, Data).
-
+add_attr(_, []) ->
+    ok;
 add_attr(Parent, AddList) ->
     gen_server:call(Parent, {add_attr, AddList}).
 
+set_attr(State, Attr) ->
+    State#state{attr = Attr}.
+set_echo(State, Echo) ->
+    State#state{echo = Echo}.
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -87,7 +93,7 @@ init({Ref, Socket, Transport, _Opts = []}) ->
     {stop, Reason :: term(), NewState :: #state{}}).
 handle_call({add_attr, AddList}, _From, #state{attr = Attr} = State) ->
     {reply, ok, State#state{attr = AddList ++ Attr}};
-handle_call(_Request, _From,  State) ->
+handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 %%--------------------------------------------------------------------
@@ -173,12 +179,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 add_run(#state{run = Run} = State, Pid, Ref, Cmd, MS, EndTime) ->
     NRun = lists:keysort(1, [{MS + EndTime, Pid, Ref, Cmd} | Run]),
-    case Cmd =:= 'echo' of
-        true ->
-            State#state{run = NRun, echo = MS};
-        false ->
-            State#state{run = NRun}
-    end.
+    State#state{run = NRun, echo = MS}.
 
 handle_time_out([], _MS) ->
     [];

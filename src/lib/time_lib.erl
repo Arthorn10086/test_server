@@ -1,16 +1,16 @@
--module(login_port).
+-module(time_lib).
 
 %%%=======================STATEMENT====================
--description("login_port").
+-description("time_lib").
 -author("yhw").
 
 %%%=======================EXPORT=======================
--export([login/4, check/3]).
+-export([now_second/0, now_millisecond/0, get_zero_second/0]).
 
 %%%=======================INCLUDE======================
 
 %%%=======================DEFINE======================
--include("../include/login_pb.hrl").
+
 %%%=======================RECORD=======================
 
 %%%=======================TYPE=========================
@@ -23,16 +23,23 @@
 %%        
 %% @end
 %% ----------------------------------------------------
-login(_A, _Session, _Attr, Msg) ->
-    #'LoginReq'{user = UserName, password = Password} = Msg,
-    {ok, Maps, _, _} = server_db_client:get('user', UserName, none),
-    case check_lib:check_all(['exist', {'password', Password}], {?MODULE, check}, 'login', Maps) of
-        true ->
-            {ok, [], #loginResp{now_ms = 111,role_info = []}};
-        Err ->
-            {error, [], Err}
-    end.
+now_millisecond() ->
+    {M, S, MS} = os:timestamp(),
+    M * 1000000000 + S * 1000 + MS div 1000.
+%% ----------------------------------------------------
+%% @doc
+%%
+%% @end
+%% ----------------------------------------------------
+now_second() ->
+    {M, S, _} = os:timestamp(),
+    M * 1000000 + S.
 
+get_zero_second() ->
+    {TM, TS, MS} = os:timestamp(),
+    Now = TM * 1000000 + TS,
+    {_, {H, M, S}} = calendar:now_to_local_time({TM, TS, MS}),
+    Now - (H * 60 * 60 + M * 60 + S).
 
 %%%===================LOCAL FUNCTIONS==================
 %% ----------------------------------------------------
@@ -40,9 +47,3 @@ login(_A, _Session, _Attr, Msg) ->
 %%  
 %% @end
 %% ----------------------------------------------------
-check('exist', 'login', Maps) ->
-    check_lib:get_bool_value(Maps =/= none, "no_exist_user");
-check({'password', PW}, 'login', Maps) ->
-    check_lib:get_bool_value(maps:get('password', Maps) =:= PW, "password_error");
-check(_, _, _) ->
-    "undefined_condition".

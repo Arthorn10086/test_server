@@ -52,8 +52,6 @@ init([]) ->
     Child5 = #{id => file_monitor,
         start => {file_monitor, start_link, [Path]},
         shutdown => brutal_kill},
-
-
     {ok, {{one_for_all, 3, 10}, [Child1, Child2, Child3, Child4, Child5]}}.
 
 %%====================================================================

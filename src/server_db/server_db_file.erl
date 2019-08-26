@@ -51,7 +51,7 @@ init([{Name, Options}]) ->
             Ets = ets:new(?MODULE, ['protected', 'set']),
             KeyEts = ets:new(?MODULE, ['protected', 'ordered_set']),
             erlang:send_after(InterVal, self(), 'batch_write'),
-            {ok, #state{db_name = Name, interval = InterVal, key = {KeyName, KeyType}, ets = Ets, key_ets = KeyEts, fields = FieldL}, 0}
+            {ok, #state{db_name = Name, interval = InterVal, key = {KeyName, KeyType}, ets = Ets, key_ets = KeyEts, fields = lists:reverse(FieldL)}, 0}
     end.
 
 
@@ -133,19 +133,24 @@ batch_write(DBName, Ets, Fields, KeyName, KeyType) ->
 
 
 action(State, Action, Key, Value, Vsn, Locker, LockTime, MS) ->
-    case erlang:get({lock, Key}) of
+    case erlang:get({'lock', Key}) of
         undefined when LockTime > 0 ->
-            erlang:put({lock, Key}, {Locker, MS + LockTime}),
+            erlang:put({'lock', Key}, {Locker, MS + LockTime}),
             ?MODULE:Action(State, Key, Value, Vsn, MS);
         undefined ->
             ?MODULE:Action(State, Key, Value, Vsn, MS);
         {Locker, _} ->
-            erlang:put({lock, Key}, {Locker, MS + LockTime}),
+            if
+                LockTime =:= 0 ->
+                    erlang:erase({'lock', Key});
+                true ->
+                    erlang:put({'lock', Key}, {Locker, MS + LockTime})
+            end,
             ?MODULE:Action(State, Key, Value, Vsn, MS);
         {_Lock, EndTime} ->
             if
                 EndTime < MS ->
-                    erlang:put({lock, Key}, {Locker, MS + LockTime}),
+                    erlang:put({'lock', Key}, {Locker, MS + LockTime}),
                     ?MODULE:Action(State, Key, Value, Vsn, MS);
                 true ->
                     lock_error

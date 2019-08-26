@@ -5,7 +5,7 @@
 -author("yhw").
 
 %%%=======================EXPORT=======================
--export([get/3, get/5, update/3, update/7, delete/2, delete/4, transaction/3, transaction/5, write/4]).
+-export([get/3, get/5, update/3, update/5, update/7, delete/2, delete/4, transaction/3, transaction/5, write/4, lock/4]).
 
 %%%=======================INCLUDE======================
 
@@ -54,6 +54,8 @@ get(TableName, Key, Default, LockTime, TimeOut) ->
 %% ----------------------------------------------------
 update(TableName, Key, Value) ->
     update(TableName, Key, fun(_, _) -> {'ok', 'ok', Value} end, 'none', [], ?LOCKTIMEOUT, ?TIMEOUT).
+update(TableName, Key, Fun, Default, FunArgs) ->
+    update(TableName, Key, Fun, Default, FunArgs, ?LOCKTIMEOUT, ?TIMEOUT).
 update(TableName, Key, Fun, Default, FunArgs, LockTime, TimeOut) ->
     ID = server_db_lib:get_db_name(TableName),
     {V, Vsn} = case get(TableName, Key, Default, LockTime, TimeOut) of
@@ -91,21 +93,12 @@ update(TableName, Key, Fun, Default, FunArgs, LockTime, TimeOut) ->
 %% ----------------------------------------------------
 lock(TableName, Key, LockTime, TimeOut) ->
     ID = server_db_lib:get_db_name(TableName),
-    STime = time_lib:now_millisecond(),
     SendInfo = format_send({'lock', Key, LockTime}),
     case catch gen_server:call(ID, SendInfo, TimeOut) of
         'ok' ->
             'ok';
         'lock_error' ->
-            timer:sleep(?LOCK_INTERVAL),
-            NMS = time_lib:now_millisecond(),
-            NLockT = STime - NMS,
-            if
-                NLockT > 0 ->
-                    lock(ID, Key, LockTime - (STime - time_lib:now_millisecond()), TimeOut);
-                true ->
-                    throw({'lock_error', ID, Key, NMS})
-            end;
+            throw({'lock_error', ID, Key});
         Err ->
             throw({'lock_error', ID, Key, Err})
     end.
@@ -154,16 +147,14 @@ write(TableName, Key, Value, Vsn) ->
 transaction(TableKeys, MFA, Args) ->
     transaction(TableKeys, MFA, Args, ?LOCKTIMEOUT, ?TIMEOUT).
 transaction(TableKeys, MFA, Args, LockTime, TimeOut) ->
-    Ref = make_ref(),
     TableKeyL = [{TableName, Key} || {TableName, Key, _Default} <- TableKeys],
-    transaction_send(TableKeys, Ref, LockTime, TimeOut),
-    case transaction_receive(TableKeyL, Ref, []) of
+    case transaction_lock(TableKeys, LockTime, TimeOut) of
         {ok, TableKeyVs} ->
             case catch transaction_(MFA, Args, TableKeys, TableKeyVs) of
                 {'error', Err1} ->
                     throw({Err1, MFA, TableKeyVs, Args});
                 Reply ->
-                    try transaction_after(Reply, TableKeyVs) of
+                    try transaction_mfa_after(Reply, TableKeyVs) of
                         {'error', Err} ->
                             throw({Err, Reply, MFA, TableKeyVs, Args});
                         {ok, Msg} ->
@@ -199,32 +190,66 @@ format_send({'delete', Key, Vsn}) ->
 %%      事务辅助函数
 %% @end
 %% ----------------------------------------------------
-transaction_send(TableKeys, Ref, LockTime, TimeOut) ->
-    P = self(),
-    lists:foreach(fun({TableName, Key, Default}) -> spawn(fun() ->
-        case catch get(TableName, Key, Default, LockTime, TimeOut) of
-            {ok, V, Vsn, _T} ->
-                P ! {Ref, TableName, Key, V, Vsn};
+transaction_lock(TableKeys, LockTime, TimeOut) ->
+    STime = time_lib:now_millisecond(),
+    {Suc, Fail} = lists:foldl(fun({Tab, Key, Def}, {R1, R2}) ->
+        ID = server_db_lib:get_db_name(Tab),
+        SendInfo = format_send({'get', Key, LockTime}),
+        case catch gen_server:call(ID, SendInfo, TimeOut) of
+            none ->
+                {[{{Tab, Key}, Def, 0} | R1], R2};
+            {ok, OlV, OldVsn, _} ->
+                {[{{Tab, Key}, OlV, OldVsn} | R1], R2};
             _ ->
-                P ! {Ref, TableName, Key, 'lock_error'}
+                {R1, [{Tab, Key} | R2]}
         end
-    end) end, TableKeys).
-
-transaction_receive(TableKeys, Ref, RcvL) ->
-    receive
-        {Ref, TableName, Key, V, Vsn} ->
-            NRcvL = [{{TableName, Key}, V, Vsn} | RcvL],
-            case lists:delete({TableName, Key}, TableKeys) of
-                [] ->
-                    {'ok', NRcvL};
-                NL ->
-                    transaction_receive(NL, Ref, NRcvL)
-            end;
-        {Ref, TableName, Key, 'lock_error'} ->
-            {'error', {TableName, Key}};
-        _ ->
-            transaction_receive(TableKeys, Ref, RcvL)
+    end, {[], []}, TableKeys),
+    if
+        Fail =:= [] ->
+            {ok, Suc};
+        true ->
+            lists:foreach(fun({{T, K}, _, _}) ->
+                lock(T, K, 0, ?TIMEOUT)
+            end, Suc),
+            timer:sleep(?LOCK_INTERVAL),
+            NMS = time_lib:now_millisecond(),
+            NLockTime = LockTime - (STime - NMS),
+            if
+                NLockTime > 0 ->
+                    transaction_lock(TableKeys, NLockTime, TimeOut);
+                true ->
+                    throw({'transaction_lock_error', Fail})
+            end
     end.
+
+%%transaction_send(TableKeys, Ref, LockTime, TimeOut) ->
+%%    P = self(),
+%%    lists:foreach(fun({TableName, Key, Default}) -> spawn(fun() ->
+%%        case catch get(TableName, Key, Default, LockTime, TimeOut) of
+%%            {ok, V, Vsn, _T} ->
+%%                P ! {Ref, TableName, Key, V, Vsn};
+%%            _ ->
+%%                P ! {Ref, TableName, Key, 'lock_error'}
+%%        end
+%%    end) end, TableKeys).
+%%
+%%transaction_receive(TableKeys, Ref, RcvL) ->
+%%    receive
+%%        {Ref, TableName, Key, V, Vsn} ->
+%%            NRcvL = [{{TableName, Key}, V, Vsn} | RcvL],
+%%            case lists:delete({TableName, Key}, TableKeys) of
+%%                [] ->
+%%                    {'ok', NRcvL};
+%%                NL ->
+%%                    transaction_receive(NL, Ref, NRcvL)
+%%            end;
+%%        {Ref, TableName, Key, 'lock _error'} ->
+%%            {'error', {TableName, Key}};
+%%        {Ref, 'time_out'} ->
+%%            {'error', 'rcv_timeout'};
+%%        _ ->
+%%            transaction_receive(TableKeys, Ref, RcvL)
+%%    end.
 
 
 transaction_(MFA, Args, TableKeys, TableKeyVs) ->
@@ -242,7 +267,7 @@ transaction_(MFA, Args, TableKeys, TableKeyVs) ->
     end.
 
 
-transaction_after(Reply, TableKeyVs) ->
+transaction_mfa_after(Reply, TableKeyVs) ->
     case Reply of
         {ok, Msg} ->
             {ok, Msg};

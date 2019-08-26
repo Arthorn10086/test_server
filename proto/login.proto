@@ -1,7 +1,15 @@
+//注册
+message RegReq{
+required uint32 user =1;
+required string password =2;
+}
+message RegResp{
+required uint32 status = 1;
+}
 
 //登录
 message LoginReq{
-required string user =1;
+required uint32 user =1;
 required string password =2;
 }
 message loginResp{

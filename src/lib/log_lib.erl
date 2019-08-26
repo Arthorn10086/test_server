@@ -1,16 +1,16 @@
--module(login_port).
+-module(log_lib).
 
 %%%=======================STATEMENT====================
--description("login_port").
+-description("log_lib").
 -author("yhw").
 
 %%%=======================EXPORT=======================
--export([login/4, check/3]).
+-export([info/2, error/2]).
 
 %%%=======================INCLUDE======================
 
 %%%=======================DEFINE======================
--include("../include/login_pb.hrl").
+
 %%%=======================RECORD=======================
 
 %%%=======================TYPE=========================
@@ -23,15 +23,12 @@
 %%        
 %% @end
 %% ----------------------------------------------------
-login(_A, _Session, _Attr, Msg) ->
-    #'LoginReq'{user = UserName, password = Password} = Msg,
-    {ok, Maps, _, _} = server_db_client:get('user', UserName, none),
-    case check_lib:check_all(['exist', {'password', Password}], {?MODULE, check}, 'login', Maps) of
-        true ->
-            {ok, [], #loginResp{now_ms = 111,role_info = []}};
-        Err ->
-            {error, [], Err}
-    end.
+info(Pid, Data) ->
+    lager:log(info, Pid, "~p~n", Data),
+    ok.
+error(Pid, Data) ->
+    lager:log(error, Pid, "~p~n", Data),
+    ok.
 
 
 %%%===================LOCAL FUNCTIONS==================
@@ -40,9 +37,3 @@ login(_A, _Session, _Attr, Msg) ->
 %%  
 %% @end
 %% ----------------------------------------------------
-check('exist', 'login', Maps) ->
-    check_lib:get_bool_value(Maps =/= none, "no_exist_user");
-check({'password', PW}, 'login', Maps) ->
-    check_lib:get_bool_value(maps:get('password', Maps) =:= PW, "password_error");
-check(_, _, _) ->
-    "undefined_condition".

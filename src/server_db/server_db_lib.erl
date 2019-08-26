@@ -72,8 +72,6 @@ term_to_string(Term) when is_tuple(Term), is_list(Term), is_binary(Term), is_map
 term_to_string(Term) when is_pid(Term) ->
     erlang:pid_to_list(Term);
 term_to_string(Term) when is_function(Term) ->
-    erlang:fun_to_list(Term);
-term_to_string(Term) when is_map(Term) ->
     erlang:fun_to_list(Term).
 %% ----------------------------------------------------
 %% @doc
