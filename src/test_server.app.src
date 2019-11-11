@@ -9,7 +9,7 @@
                 stdlib,
                 sasl,
                 ranch,
-                mysql_poolboy,
+%%                mysql_poolboy,
                 lager
             ]},
         {env, [{cfg_path, "./config"}, {port, 7620}]},

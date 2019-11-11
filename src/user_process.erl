@@ -129,7 +129,10 @@ handle_info({tcp, Socket, Bin}, #state{socket = Socket, transport = Transport, a
     MS = time_lib:now_millisecond(),
     NState = protocol_routing:route(State, Attr, Bin, MS),
     {noreply, NState#state{echo = MS}};
-handle_info({tcp_closed, _Socket, _Data}, State) ->
+handle_info({'DOWN', Ref, 'process', _Pid, _Reason}, #state{run = Run} = State) ->
+    Run1 = lists:keydelete(Ref, 3, Run),
+    {noreply, State#state{run = Run1}};
+handle_info({tcp_closed, _Socket}, State) ->
     {stop, tcp_closed, State};
 handle_info(echo, #state{run = Run, echo = LastTime} = State) ->
     MS = time_lib:now_millisecond(),
@@ -141,7 +144,7 @@ handle_info(echo, #state{run = Run, echo = LastTime} = State) ->
             {noreply, State#state{run = NRun}}
     end;
 handle_info(_Info, #state{socket = Socket, transport = Transport} = State) ->
-    ok = Transport:setopts(Socket, [{active, once}]),
+    io:format("unkown:~p~n", [_Info]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -157,6 +160,8 @@ handle_info(_Info, #state{socket = Socket, transport = Transport} = State) ->
 %%--------------------------------------------------------------------
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
         State :: #state{}) -> term()).
+terminate(death, _State) ->
+    lager:info("echo_time_out");
 terminate(_Reason, _State) ->
     ok.
 
