@@ -67,7 +67,7 @@ term_to_string(Term) when is_integer(Term) ->
     integer_to_list(Term);
 term_to_string(Term) when is_float(Term) ->
     float_to_list(Term);
-term_to_string(Term) when is_tuple(Term), is_list(Term), is_binary(Term), is_map(Term) ->
+term_to_string(Term) when is_tuple(Term); is_list(Term); is_binary(Term); is_map(Term) ->
     binary_to_list(unicode:characters_to_binary(io_lib:format("'~p.'", [Term])));
 term_to_string(Term) when is_pid(Term) ->
     erlang:pid_to_list(Term);

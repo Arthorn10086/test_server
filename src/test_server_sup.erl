@@ -34,6 +34,7 @@ start_link() ->
 init([]) ->
     {ok, Port} = application:get_env(port),
     {ok, Path} = application:get_env(cfg_path),
+    {ok, CacheTactics} = application:get_env(db_cache_tactics),
     {ok, _} = ranch:start_listener(user_process,
         ranch_tcp, [{port, Port}], user_process, []),
     Child1 = #{id => config_lib,
@@ -46,7 +47,7 @@ init([]) ->
         start => {server_timer, start_link, []},
         shutdown => brutal_kill},
     Child4 = #{id => server_db,
-        start => {server_db, start_link, []},
+        start => {server_db, start_link, [CacheTactics]},
         shutdown => brutal_kill,
         type => supervisor},
     Child5 = #{id => file_monitor,

@@ -20,7 +20,7 @@
 -define(INTERVAL, 1000).
 -include("../../include/server.hrl").
 
--record(state, {db_name, key, interval, cahce_size, cahce_time, key_ets, ets, fields}).
+-record(state, {db_name, key, interval, cahce_tactics, cahce_size, cahce_time, key_ets, ets, fields}).
 
 %%%===================================================================
 %%% API
@@ -48,10 +48,12 @@ init([{Name, Options}]) ->
         FieldL ->
             {_, InterVal} = lists:keyfind('interval', 1, Options),
             {_, KeyName, KeyType} = lists:keyfind('key', 1, Options),
+            {_, Tactics} = lists:keyfind('cache_tactics', 1, Options),
             Ets = ets:new(?MODULE, ['protected', 'set']),
             KeyEts = ets:new(?MODULE, ['protected', 'ordered_set']),
             erlang:send_after(InterVal, self(), 'batch_write'),
-            {ok, #state{db_name = Name, interval = InterVal, key = {KeyName, KeyType}, ets = Ets, key_ets = KeyEts, fields = lists:reverse(FieldL)}, 0}
+            {ok, #state{db_name = Name, interval = InterVal, key = {KeyName, KeyType}, ets = Ets, key_ets = KeyEts,
+                fields = FieldL, cahce_tactics = Tactics}, 0}
     end.
 
 
@@ -71,9 +73,14 @@ handle_info(timeout, #state{db_name = DBName, key_ets = Ets, key = {KeyName, Key
     {_, _, KeyList} = mysql_poolboy:query(?POOLNAME, SQL),
     lists:foreach(fun([Key]) -> ets:insert(Ets, {Key}) end, KeyList),
     {noreply, State};
-handle_info(batch_write, #state{db_name = DBName, ets = Ets, key = {KeyName, KeyType}, interval = InterVal, fields = Fields} = State) ->
-    erlang:send_after(InterVal, self(), batch_write),
-    batch_write(DBName, Ets, Fields, KeyName, KeyType),
+handle_info(batch_write, #state{db_name = DBName, ets = Ets, key = {KeyName, KeyType}, cahce_tactics = Tactics, interval = InterVal, fields = Fields} = State) ->
+    case Tactics of
+        write_behind ->
+            erlang:send_after(InterVal, self(), batch_write),
+            batch_write(DBName, Ets, Fields, KeyName, KeyType);
+        write_through ->
+            ok
+    end,
     {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -185,17 +192,57 @@ get(State, Key, _, _, MS) ->
             end
     end.
 update(State, Key, Value, Vsn, MS) ->
-    #state{ets = Ets, key_ets = KeyEts} = State,
+    #state{cahce_tactics = Tactics, ets = Ets, key_ets = KeyEts} = State,
+    Bool = Tactics =:= write_through,
     case ets:lookup(Ets, Key) of
         [] ->
+            if
+                Bool ->
+                    %%数据库修改
+                    insert_mysql_value(State, Value),
+                    ok;
+                true ->
+                    ok
+            end,
             ets:insert(KeyEts, {Key}),
             ets:insert(Ets, {Key, Value, MS, 1});
-        [{_, _, _, Vsn}] ->
+        [{_, OldValue, _, Vsn}] ->
+            if
+                Bool ->
+                    %%数据库修改
+                    update_mysql(State, Key, Value, OldValue),
+                    ok;
+                true ->
+                    ok
+            end,
             ets:insert(Ets, {Key, Value, MS, Vsn + 1});
         [{_, _, _, _OldVsn}] ->
             {'error', 'version_error'}
     end.
 delete(State, Key, _, _, _) ->
-    #state{ets = Ets, key_ets = KeyEts} = State,
-    ets:delete(KeyEts, Key),
-    ets:insert(Ets, {Key, 'delete'}).
+    #state{cahce_tactics = Tactics, ets = Ets, key_ets = KeyEts} = State,
+    case Tactics of
+        write_behind ->
+            ets:delete(KeyEts, Key),
+            ets:insert(Ets, {Key, 'delete'});
+        write_through ->
+            ets:delete(KeyEts, Key),
+            ets:delete(Ets, Key),
+            %%数据库删除
+            delete_mysql_value(State, Key),
+            ok
+    end.
+
+
+
+insert_mysql_value(#state{db_name = DBName, fields = Fields}, Value) ->
+    mysql:query(?POOLNAME, get_replace_prepare(DBName, Fields), tuple_to_list(Value)).
+
+update_mysql(#state{db_name = DBName, fields = Fields, key = {KeyName, KeyType}}, Key, Value, OldValue) ->
+    ok.
+
+delete_mysql_value(#state{db_name = DBName, key = {KeyName, KeyType}}, Key) ->
+    mysql_poolboy:query(?POOLNAME, get_delete_prepare(DBName, KeyName, KeyType), [Key]).
+
+
+

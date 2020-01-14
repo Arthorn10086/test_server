@@ -100,7 +100,7 @@ handle_call({'delete', TableName, Key}, _From, State) ->
         _:_ ->
             none
     end,
-    {reply, Reply, State, hibernate};
+    {reply, Reply, State, 3000};
 %%修改
 handle_call({'update', TableName, Info}, _From, State) ->
     KeyPos = ets:info(TableName, keypos),
@@ -112,14 +112,14 @@ handle_call({'update', TableName, Info}, _From, State) ->
             none
     end,
     ets:insert(TableName, Info),
-    {reply, {ok, Reply}, State, hibernate};
+    {reply, {ok, Reply}, State, 3000};
 %%批量修改
 handle_call({'batch_update', TableName, KVL}, _From, State) ->
     F = fun(Data) ->
         ets:insert(TableName, Data)
     end,
     lists:foreach(F, KVL),
-    {reply, ok, State, hibernate};
+    {reply, ok, State, 3000};
 %%创建新表并设置值
 handle_call({'create', TableName, KVL, Options}, _From, State) ->
     Ets = ets:new(TableName, Options),
@@ -128,7 +128,7 @@ handle_call({'create', TableName, KVL, Options}, _From, State) ->
     end,
     lists:foreach(F, KVL),
     ets:insert(State, {TableName}),
-    {reply, ok, State, hibernate};
+    {reply, ok, State, 3000};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -144,7 +144,7 @@ handle_call(_Request, _From, State) ->
 handle_cast({'delete', TableName}, Ets) ->
     ets:delete(TableName),
     ets:delete(Ets, TableName),
-    {noreply, Ets, hibernate};
+    {noreply, Ets, 3000};
 handle_cast(_Request, State) ->
     {noreply, State}.
 

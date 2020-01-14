@@ -77,7 +77,7 @@ handle_info({'DOWN', Ref, process, Pid, Reason}, #state{run_list = L} = State) -
     case Reason of
         'normal' ->
             ok;
-        'time_out'->
+        'time_out' ->
             ok;
         _ ->
             lager:log(error, Pid, "~p~n", [{Ref, Reason}])
