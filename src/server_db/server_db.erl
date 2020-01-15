@@ -4,7 +4,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/1, set/2, delete/1]).
+-export([start_link/1, set/2, delete/1, check_options/1]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -29,13 +29,18 @@ start_link(Tactics) ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, [Tactics]).
 
 set(Name, Options) ->
-    {_, Mod} = lists:keyfind(mod, 1, Options),
-    ID = server_db_lib:get_db_name(Name),
-    Tactics = get_cache_tactics(),
-    ChildSpec = {ID, {Mod, start_link, [ID, Name, [{'cache_tactics', Tactics} | Options]]},
-        permanent, 5000, worker, [Mod]},
-    supervisor:start_child(?MODULE, ChildSpec),
-    ets:insert(?MODULE, {Name, Options}).
+    case check_options(Options) of
+        true ->
+            {_, Mod} = lists:keyfind(mod, 1, Options),
+            ID = server_db_lib:get_db_name(Name),
+            {_, Tactics} = get_cache_tactics(),
+            ChildSpec = {ID, {Mod, start_link, [ID, Name, [{'cache_tactics', Tactics} | Options]]},
+                permanent, 5000, worker, [Mod]},
+            supervisor:start_child(?MODULE, ChildSpec),
+            ets:insert(?MODULE, {Name, Options});
+        false ->
+            false
+    end.
 delete(Name) ->
 %%    ets:delete(?MODULE, Name),
 %%    ID = server_db_lib:get_db_name(Name),
@@ -45,6 +50,17 @@ delete(Name) ->
 get_cache_tactics() ->
     [Tactics] = ets:lookup(?MODULE, '$db_cache_tactics'),
     Tactics.
+
+check_options(Options) ->
+    Bool1 = lists:all(fun(Key) -> lists:keymember(Key, 1, Options) end, [mod, key, interval]),
+    Bool2 = case lists:keyfind(mod, 1, Options) of
+        {_, server_db_file} ->
+            {_, Interval} = lists:keyfind(interval, 1, Options),
+            86400000 rem Interval =:= 0;
+        _ ->
+            true
+    end,
+    Bool1 andalso Bool2.
 %%%===================================================================
 %%% Supervisor callbacks
 %%%===================================================================

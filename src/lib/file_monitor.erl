@@ -230,8 +230,7 @@ handle_({'server_timer', {Ref, MFA, TimeInfo}}, Reply) ->
 handle_({'server_db', {Name, Options}}, Reply) ->
     server_db:set(Name, Options),
     ProL = list_lib:get_value('server_db', 1, Reply, []),
-    NReply = lists:keystore('server_db', 1, Reply, {'server_db', [Name | ProL]}),
-    NReply;
+    lists:keystore('server_db', 1, Reply, {'server_db', [Name | ProL]});
 handle_(_Data, Reply) ->
     Reply.
 

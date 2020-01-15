@@ -20,7 +20,7 @@
 -define(INTERVAL, 1000).
 -include("../../include/server.hrl").
 
--record(state, {db_name, key, interval, cahce_tactics, cahce_size, cahce_time, key_ets, ets, fields}).
+-record(state, {db_name, key, interval, cahce_tactics, cahce_size, cahce_time, key_ets, ets, fields, cahce_ref, write_ref}).
 
 %%%===================================================================
 %%% API
@@ -33,17 +33,20 @@
 %% @end
 %%--------------------------------------------------------------------
 start_link(ID, Name, Options) ->
-    gen_server:start_link({local, ID}, ?MODULE, [{Name, Options}], []).
+    {ok, proc_lib:spawn_link(?MODULE, init, [{ID, Name, Options}])}.
+%%    gen_server:start_link({local, ID}, ?MODULE, [{Name, Options}], []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([{Name, Options}]) ->
+init({ID, Name, Options}) ->
+    register(ID, self()),
+    %%拿到所有字段
     FieldsSql = server_db_lib:get_fields_sql(Name),
     {_, _, Fields} = mysql_poolboy:query(?POOLNAME, FieldsSql),
-    FieldL = [list_to_atom(binary:bin_to_list(B)) || B <- lists:flatten(Fields)],
+    FieldL = lists:reverse([list_to_atom(binary:bin_to_list(B)) || B <- lists:flatten(Fields)]),
     case FieldL of
-        [] ->
+        [] ->%%表不存在
             {stop, 'none_table'};
         FieldL ->
             {_, InterVal} = lists:keyfind('interval', 1, Options),
@@ -51,9 +54,26 @@ init([{Name, Options}]) ->
             {_, Tactics} = lists:keyfind('cache_tactics', 1, Options),
             Ets = ets:new(?MODULE, ['protected', 'set']),
             KeyEts = ets:new(?MODULE, ['protected', 'ordered_set']),
-            erlang:send_after(InterVal, self(), 'batch_write'),
-            {ok, #state{db_name = Name, interval = InterVal, key = {KeyName, KeyType}, ets = Ets, key_ets = KeyEts,
-                fields = FieldL, cahce_tactics = Tactics}, 0}
+            %%加载所有Key
+            SQL = server_db_lib:get_all_key_sql(Name, KeyName, KeyType),
+            {_, _, KeyList} = mysql_poolboy:query(?POOLNAME, SQL),
+            lists:foreach(fun([Key]) -> ets:insert(KeyEts, {Key}) end, KeyList),
+            %%缓存策略
+            BehindBool = is_behind(Tactics),
+            Ref = if
+                BehindBool ->%%缓存延时批量写
+                    Now = time_lib:now_second(),
+                    ZeroTime = time_lib:get_zero_second(),
+                    DayTime = Now-ZeroTime,
+                    NextTime = trunc(DayTime / InterVal) * InterVal + InterVal,
+                    DifTime = NextTime-DayTime,
+                    erlang:start_timer(DifTime, self(), 'batch_write');
+                true ->
+                    ok
+            end,
+            gen_server:enter_loop(?MODULE, [],
+                #state{db_name = Name, interval = InterVal, key = {KeyName, KeyType}, ets = Ets, key_ets = KeyEts,
+                    fields = FieldL, cahce_tactics = Tactics, write_ref = Ref}, {local, ID})
     end.
 
 
@@ -68,15 +88,10 @@ handle_cast(_Request, State) ->
     {noreply, State}.
 
 
-handle_info(timeout, #state{db_name = DBName, key_ets = Ets, key = {KeyName, KeyType}} = State) ->
-    SQL = server_db_lib:get_all_key_sql(DBName, KeyName, KeyType),
-    {_, _, KeyList} = mysql_poolboy:query(?POOLNAME, SQL),
-    lists:foreach(fun([Key]) -> ets:insert(Ets, {Key}) end, KeyList),
-    {noreply, State};
-handle_info(batch_write, #state{db_name = DBName, ets = Ets, key = {KeyName, KeyType}, cahce_tactics = Tactics, interval = InterVal, fields = Fields} = State) ->
+handle_info({time_out, Ref, 'batch_write'}, #state{db_name = DBName, ets = Ets, key = {KeyName, KeyType}, cahce_tactics = Tactics, interval = InterVal, fields = Fields, write_ref = Ref} = State) ->
     case Tactics of
         write_behind ->
-            erlang:send_after(InterVal, self(), batch_write),
+            erlang:start_timer(InterVal, self(), 'batch_write'),
             batch_write(DBName, Ets, Fields, KeyName, KeyType);
         write_through ->
             ok
@@ -97,48 +112,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-get_replace_prepare(DBName, Fields) ->
-    {[_ | R], [_ | T]} = lists:foldl(fun(Field, {Acc1, Acc2}) ->
-        {[$, | server_db_lib:term_to_string(Field) ++ Acc1], [$,, $? | Acc2]}
-    end, {"", []}, lists:reverse(Fields, [])),
-    "REPLACE INTO " ++ server_db_lib:term_to_string(DBName) ++ " (" ++ R ++ ") VALUES (" ++ T ++ ");".
-get_delete_prepare(DBName, KeyName, KeyType) ->
-    case KeyType of
-        integer ->
-            "DELETE FROM " ++ atom_to_list(DBName) ++ " WHERE " ++ atom_to_list(KeyName) ++ "=?;";
-        string ->
-            "DELETE FROM " ++ atom_to_list(DBName) ++ " WHERE " ++ atom_to_list(KeyName) ++ " LIKE '%?%';"
-    end.
-
-to_params(Fields, KVL) ->
-    [element(2, lists:keyfind(Field, 1, KVL)) || Field <- Fields].
-
-batch_write(DBName, Ets, Fields, KeyName, KeyType) ->
-    ReplacePrepare = get_replace_prepare(DBName, Fields),
-    DelPrepare = get_delete_prepare(DBName, KeyName, KeyType),
-    Conn = poolboy:checkout(?POOLNAME2),
-    {ok, I1} = mysql:prepare(Conn, ReplacePrepare),
-    {ok, I2} = mysql:prepare(Conn, DelPrepare),
-    F = fun({_, _, _, 0}, _Acc) ->
-        ok;
-        ({Key, Maps, Time, _Version}, _Acc) ->
-            Params = to_params(Fields, maps:to_list(Maps)),
-            mysql:execute(Conn, I1, Params),
-            ets:insert(Ets, {Key, Maps, Time, 0}),
-            ok;
-        ({Key, 'delete'}, _Acc) ->
-            mysql:execute(Conn, I2, Key),
-            ets:delete(Ets, Key),
-            ok
-    end,
-    ets:foldl(F, [], Ets),
-    mysql:unprepare(Conn, I1),
-    mysql:unprepare(Conn, I2),
-    poolboy:checkin(?POOLNAME2, Conn),
-    ok.
-
-
-
+%%操作
 action(State, Action, Key, Value, Vsn, Locker, LockTime, MS) ->
     case erlang:get({'lock', Key}) of
         undefined when LockTime > 0 ->
@@ -193,28 +167,26 @@ get(State, Key, _, _, MS) ->
     end.
 update(State, Key, Value, Vsn, MS) ->
     #state{cahce_tactics = Tactics, ets = Ets, key_ets = KeyEts} = State,
-    Bool = Tactics =:= write_through,
+    Bool = is_behind(Tactics),
     case ets:lookup(Ets, Key) of
-        [] ->
+        [] ->%%新增
             if
                 Bool ->
-                    %%数据库修改
-                    insert_mysql_value(State, Value),
                     ok;
                 true ->
-                    ok
+                    insert_mysql_value(State, Value)
             end,
+            %%修改缓存
             ets:insert(KeyEts, {Key}),
             ets:insert(Ets, {Key, Value, MS, 1});
-        [{_, OldValue, _, Vsn}] ->
+        [{_, OldValue, _, Vsn}] ->%%修改
             if
                 Bool ->
-                    %%数据库修改
-                    update_mysql(State, Key, Value, OldValue),
                     ok;
                 true ->
-                    ok
+                    update_mysql(State, Key, Value, OldValue)
             end,
+            %修改缓存
             ets:insert(Ets, {Key, Value, MS, Vsn + 1});
         [{_, _, _, _OldVsn}] ->
             {'error', 'version_error'}
@@ -226,23 +198,100 @@ delete(State, Key, _, _, _) ->
             ets:delete(KeyEts, Key),
             ets:insert(Ets, {Key, 'delete'});
         write_through ->
+            delete_mysql_value(State, Key),
             ets:delete(KeyEts, Key),
             ets:delete(Ets, Key),
             %%数据库删除
-            delete_mysql_value(State, Key),
             ok
     end.
 
 
-
+%%mysql插入
 insert_mysql_value(#state{db_name = DBName, fields = Fields}, Value) ->
-    mysql:query(?POOLNAME, get_replace_prepare(DBName, Fields), tuple_to_list(Value)).
+    mysql_poolboy:query(?POOLNAME, get_replace_prepare(DBName, Fields), tuple_to_list(Value)).
 
+%修改指定字段的值
 update_mysql(#state{db_name = DBName, fields = Fields, key = {KeyName, KeyType}}, Key, Value, OldValue) ->
-    ok.
+    {UPFields, UPValues} = get_update_values(Fields, Value, OldValue),
+    Sql = get_update_sql(DBName, KeyName, KeyType, UPFields),
+    mysql_poolboy:query(?POOLNAME, Sql, UPValues ++ [Key]).
 
+%%mysql删除
 delete_mysql_value(#state{db_name = DBName, key = {KeyName, KeyType}}, Key) ->
     mysql_poolboy:query(?POOLNAME, get_delete_prepare(DBName, KeyName, KeyType), [Key]).
 
+
+%%判断缓存是否是behind模式
+is_behind(Tactics) ->
+    Tactics =:= write_behind.
+
+
+%%获得变化的字段和新值
+get_update_values(Fields, Value, OldValue) ->
+    {UpK, UpV} = lists:foldl(fun(Field, {R1, R2}) ->
+        NV = maps:get(Field, Value),
+        case NV =:= maps:get(Field, OldValue) of
+            true ->
+                {R1, R2};
+            false ->
+                {[Field | R1], [NV | R2]}
+        end
+    end, {[], []}, Fields),
+    {lists:reverse(UpK), lists:reverse(UpV)}.
+
+
+%%组装Update语句
+get_update_sql(DBName, KeyName, KeyType, Fields) ->
+    [_ | R] = lists:flatten(lists:map(fun(Field) ->
+        "," ++ atom_to_list(Field) ++ "= ?"
+    end, Fields)),
+    Clause = case KeyType of
+        integer ->
+            "=?";
+        _ ->
+            "Like ?"
+    end,
+    "UPDATE " ++ atom_to_list(DBName) ++ " SET " ++ R ++ " WHERE " ++ atom_to_list(KeyName) ++ Clause.
+
+
+get_replace_prepare(DBName, Fields) ->
+    {[_ | R], [_ | T]} = lists:foldl(fun(Field, {Acc1, Acc2}) ->
+        {[$, | server_db_lib:term_to_string(Field) ++ Acc1], [$,, $? | Acc2]}
+    end, {"", []}, lists:reverse(Fields, [])),
+    "REPLACE INTO " ++ server_db_lib:term_to_string(DBName) ++ " (" ++ R ++ ") VALUES (" ++ T ++ ");".
+get_delete_prepare(DBName, KeyName, KeyType) ->
+    case KeyType of
+        integer ->
+            "DELETE FROM " ++ atom_to_list(DBName) ++ " WHERE " ++ atom_to_list(KeyName) ++ "=?;";
+        string ->
+            "DELETE FROM " ++ atom_to_list(DBName) ++ " WHERE " ++ atom_to_list(KeyName) ++ " LIKE ?;"
+    end.
+
+to_params(Fields, KVL) ->
+    [element(2, lists:keyfind(Field, 1, KVL)) || Field <- Fields].
+
+batch_write(DBName, Ets, Fields, KeyName, KeyType) ->
+    ReplacePrepare = get_replace_prepare(DBName, Fields),
+    DelPrepare = get_delete_prepare(DBName, KeyName, KeyType),
+    Conn = poolboy:checkout(?POOLNAME2),
+    {ok, I1} = mysql:prepare(Conn, ReplacePrepare),
+    {ok, I2} = mysql:prepare(Conn, DelPrepare),
+    F = fun({_, _, _, 0}, _Acc) ->
+        ok;
+        ({Key, Maps, Time, _Version}, _Acc) ->
+            Params = to_params(Fields, maps:to_list(Maps)),
+            mysql:execute(Conn, I1, Params),
+            ets:insert(Ets, {Key, Maps, Time, 0}),
+            ok;
+        ({Key, 'delete'}, _Acc) ->
+            mysql:execute(Conn, I2, Key),
+            ets:delete(Ets, Key),
+            ok
+    end,
+    ets:foldl(F, [], Ets),
+    mysql:unprepare(Conn, I1),
+    mysql:unprepare(Conn, I2),
+    poolboy:checkin(?POOLNAME2, Conn),
+    ok.
 
 

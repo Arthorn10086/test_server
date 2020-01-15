@@ -41,18 +41,17 @@ encode(Protocol, Serial, Data) ->
     <<BZ1:16/integer, B1/binary, BZ2:8/integer, B2/binary, Data/binary>>.
 
 decode(<<BZ1:16, Protocol:BZ1/binary, BZ2:8, Serial:BZ2/binary, Rest/binary>>) ->
-    [{'protocol', Protocol}, {'serial', Serial}, {'data', Rest}].
+    [{'protocol', binary_to_term(Protocol)}, {'serial', binary_to_term(Serial)}, {'data', Rest}].
 
+%%|<-(8位 状态码)->|<-(32位 流水号)->|<- Reply ->|
 encode_reply(Status, Serial, Data, PbMod) ->
     {B1, B3} = case Status of
         'error' ->
-            {term_to_binary(1), term_to_binary(Data)};
+            {1, term_to_binary(Data)};
         'ok' ->
-            {term_to_binary(0), PbMod:encode_msg(Data)}
+            {0, PbMod:encode_msg(Data)}
     end,
-    B2 = term_to_binary(Serial),
-    BZ2 = bit_size(B2),
-    <<B1:8/integer, BZ2:8/integer, B2/binary, B3/binary>>.
+    <<B1:8/integer, Serial:32/integer, B3/binary>>.
 
 
 %% ----------------------------------------------------
@@ -70,14 +69,8 @@ route(Session, Attr, Bin, MS) ->
     Data1 = PbMod:decode_msg(Data, Req),
     if
         Timeout =:= 0 ->%%同步访问
-            {AddAttr, Reply} = try_run(MFAList, Session, Attr, Data1, Serial, PbMod, LogM, LogF),
-            Session1 = user_process:set_attr(Session, AddAttr ++ Attr),
-            if
-                Cmd =:= 1 ->%%心跳
-                    user_process:set_echo(Session1, element(2, Reply));
-                true ->
-                    Session1
-            end;
+            {AddAttr, _} = try_run(MFAList, Session, Attr, Data1, Serial, PbMod, LogM, LogF),
+            user_process:set_attr(Session, AddAttr ++ Attr);
         true ->
             {Pid, Ref} = spawn_monitor(fun() ->
                 {AddAttr, _} = try_run(MFAList, Session, Attr, Data1, Serial, PbMod, LogM, LogF),

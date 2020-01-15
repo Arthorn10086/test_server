@@ -192,4 +192,4 @@ update(State, Key, Value, Vsn, MS) ->
 delete(State, Key, _, _, _) ->
     #state{ets = Ets, keyets = KeyEts} = State,
     ets:delete(KeyEts, Key),
-    ets:insert(Ets, {Key, 'delete'}).
+    ets:delete(Ets, Key).
