@@ -33,10 +33,15 @@ set(Name, Options) ->
         true ->
             {_, Mod} = lists:keyfind(mod, 1, Options),
             ID = server_db_lib:get_db_name(Name),
-            {_, Tactics} = get_cache_tactics(),
-            ChildSpec = {ID, {Mod, start_link, [ID, Name, [{'cache_tactics', Tactics} | Options]]},
-                permanent, 5000, worker, [Mod]},
-            supervisor:start_child(?MODULE, ChildSpec),
+            case whereis(ID) of
+                undefined ->
+                    {_, Tactics} = get_cache_tactics(),
+                    ChildSpec = {ID, {Mod, start_link, [ID, Name, [{'cache_tactics', Tactics} | Options]]},
+                        permanent, 5000, worker, [Mod]},
+                    supervisor:start_child(?MODULE, ChildSpec);
+                _ ->
+                    ok
+            end,
             ets:insert(?MODULE, {Name, Options});
         false ->
             false
@@ -52,11 +57,11 @@ get_cache_tactics() ->
     Tactics.
 
 check_options(Options) ->
-    Bool1 = lists:all(fun(Key) -> lists:keymember(Key, 1, Options) end, [mod, key, interval]),
+    Bool1 = lists:all(fun(Key) -> lists:keymember(Key, 1, Options) end, [mod, key, interval, cache_time, cache_size]),
     Bool2 = case lists:keyfind(mod, 1, Options) of
         {_, server_db_file} ->
             {_, Interval} = lists:keyfind(interval, 1, Options),
-            86400000 rem Interval =:= 0;
+            86400 rem Interval =:= 0;
         _ ->
             true
     end,

@@ -6,7 +6,7 @@
 
 
 %%%=======================EXPORT=======================
--export([encode/3, decode/1, encode_reply/4, route/4]).
+-export([encode/3, decode/1, encode_reply/4, route/1, try_run/3]).
 
 %%%=======================INCLUDE======================
 
@@ -59,25 +59,15 @@ encode_reply(Status, Serial, Data, PbMod) ->
 %%      路由
 %% @end
 %% ----------------------------------------------------
-route(Session, Attr, Bin, MS) ->
-    Parent = self(),
+route(Bin) ->
     R = decode(Bin),
     {_, Cmd} = lists:keyfind('protocol', 1, R),
     {_, Serial} = lists:keyfind('serial', 1, R),
     {_, Data} = lists:keyfind('data', 1, R),
-    {_, MFAList, {LogM, LogF, _LogA}, {PbMod, Req}, Timeout} = config_lib:get('tcp_protocol', Cmd),
+    {_, MFAList, ErrorLog, {PbMod, Req}, Timeout} = config_lib:get('tcp_protocol', Cmd),
     Data1 = PbMod:decode_msg(Data, Req),
-    if
-        Timeout =:= 0 ->%%同步访问
-            {AddAttr, _} = try_run(MFAList, Session, Attr, Data1, Serial, PbMod, LogM, LogF),
-            user_process:set_attr(Session, AddAttr ++ Attr);
-        true ->
-            {Pid, Ref} = spawn_monitor(fun() ->
-                {AddAttr, _} = try_run(MFAList, Session, Attr, Data1, Serial, PbMod, LogM, LogF),
-                user_process:add_attr(Parent, AddAttr)
-            end),
-            user_process:add_run(Session, Pid, Ref, Cmd, MS, Timeout)
-    end.
+    {Data1, Serial, MFAList, ErrorLog, PbMod, Timeout}.
+
 
 %%%===================LOCAL FUNCTIONS==================
 %% ----------------------------------------------------
@@ -101,12 +91,12 @@ handle_mfa([{M, F, A} | T], Session, Attr, Msg, AddAttr) ->
 
 
 
-try_run(MFAList, Session, Attr, Data1, Serial, PbMod, LogM, LogF) ->
+try_run(Session, Attr, {Data, Serial, MFAList, {LogM, LogF, _}, PbMod, _}) ->
     try
-        {Status, AddAttr, Reply} = handle_mfa(MFAList, Session, Attr, Data1),
+        {Status, ModifyAttr, Reply} = handle_mfa(MFAList, Session, Attr, Data),
         RData = encode_reply(Status, Serial, Reply, PbMod),
         user_process:send(Session, RData),
-        {AddAttr, Reply}
+        ModifyAttr
     catch
         E1:E2 ->
             LogM:LogF(self(), lager:pr_stacktrace(erlang:get_stacktrace(), {E1, E2})),

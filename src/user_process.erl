@@ -7,7 +7,7 @@
 %% API
 -export([start_link/4, send/2, add_attr/2]).
 -export([set_attr/2, set_echo/2]).
--export([add_run/6]).
+
 
 %% gen_server callbacks
 -export([init/1,
@@ -19,10 +19,12 @@
 
 -define(SERVER, ?MODULE).
 -define(TIMEOUT, 5000).
+
 -define(ECHO, 120000).
+
 -define(INTERVAL, 1000).
 
--record(state, {socket, transport, attr = [], run = [], echo}).
+-record(state, {socket, transport, req_queue, attr = [], current, echo, timeout_ref}).
 
 %%%===================================================================
 %%% API
@@ -42,7 +44,7 @@ send(#state{socket = Socket, transport = Transport}, Data) ->
 add_attr(_, []) ->
     ok;
 add_attr(Parent, AddList) ->
-    gen_server:call(Parent, {add_attr, AddList}).
+    Parent ! {add_attr, AddList}.
 
 set_attr(State, Attr) ->
     State#state{attr = Attr}.
@@ -56,13 +58,10 @@ init({Ref, Socket, Transport, _Opts = []}) ->
     ok = ranch:accept_ack(Ref),
     register(test_user, self()),
     ok = Transport:setopts(Socket, [{active, once}]),
-    erlang:send_after(?INTERVAL, self(), 'echo'),
     gen_server:enter_loop(?MODULE, [],
-        #state{socket = Socket, transport = Transport},
-        ?TIMEOUT).
+        #state{socket = Socket, transport = Transport, req_queue = queue:new(), current = none}, ?TIMEOUT).
 
-handle_call({add_attr, AddList}, _From, #state{attr = Attr} = State) ->
-    {reply, ok, State#state{attr = AddList ++ Attr}};
+
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -71,25 +70,59 @@ handle_cast(_Request, State) ->
     {noreply, State}.
 
 
-handle_info({tcp, Socket, Bin}, #state{socket = Socket, transport = Transport, attr = Attr} = State) ->
+%%收到消息
+handle_info({tcp, Socket, Bin}, #state{socket = Socket, transport = Transport, attr = Attr, timeout_ref = Ref} = State) ->
+    del_timer(Ref),
     Transport:setopts(Socket, [{active, once}]),
-    MS = time_lib:now_millisecond(),
-    NState = protocol_routing:route(State, Attr, Bin, MS),
-    {noreply, NState#state{echo = MS}};
-handle_info({'DOWN', Ref, 'process', _Pid, _Reason}, #state{run = Run} = State) ->
-    Run1 = lists:keydelete(Ref, 3, Run),
-    {noreply, State#state{run = Run1}};
+    Req = protocol_routing:route(Bin),
+    if
+        element(6, Req) == 0 ->
+            ModifyAttr = protocol_routing:try_run(State, Attr, Req),
+            NAttr = modify_attr(ModifyAttr, Attr),
+            {noreply, State#state{attr = NAttr}};
+        true ->
+            NState = queue_run(State, Req),
+            {noreply, NState}
+    end;
+
+%%有进程结束
+handle_info({'DOWN', Ref, 'process', Pid, _Reason}, #state{req_queue = Queue, current = {Pid, Ref, _Req}} = State) ->
+    del_timer(Ref),
+    case queue:out(Queue) of
+        {empty, _Q} ->
+            {noreply, State#state{current = none}};
+        {{value, Req}, Q} ->
+            NState = queue_run(State#state{current = none}, Req),
+            {noreply, NState#state{req_queue = Q}}
+    end;
+
+%%socket断开
 handle_info({tcp_closed, _Socket}, State) ->
     {stop, tcp_closed, State};
-handle_info(echo, #state{run = Run, echo = LastTime} = State) ->
-    MS = time_lib:now_millisecond(),
-    NRun = handle_time_out(Run, MS),
-    if
-        MS - LastTime > ?ECHO ->
-            {stop, death, State};
-        true ->
-            {noreply, State#state{run = NRun}}
+
+%%attr变化
+handle_info({add_attr, L}, #state{attr = Attr} = State) ->
+    {noreply, State#state{attr = modify_attr(L, Attr)}};
+
+%%进程空闲，发送一个延时信息然后进入休眠状态
+handle_info(timeout, State) ->
+    {noreply, State#state{timeout_ref = erlang:start_timer(?ECHO, self, 'echo_timeout')}, hibernate};
+
+%%指定时间没有收到心跳,结束
+handle_info({timeout, Ref, 'echo_timeout'}, #state{timeout_ref = Ref} = State) ->
+    {noreply, {shutdown, death}, State};
+
+%%当前请求执行超时
+handle_info({timeout, Ref, 'current_timout'}, #state{req_queue = Queue, current = {Pid, Ref, Req}} = State) ->
+    erlang:exit(Pid, kill),
+    case queue:out(Queue) of
+        {empty, _Q} ->
+            {noreply, State#state{current = none}};
+        {{value, Req}, Q} ->
+            NState = queue_run(State#state{current = none}, Req),
+            {noreply, NState#state{req_queue = Q}}
     end;
+
 handle_info(_Info, #state{socket = _Socket, transport = _Transport} = State) ->
     io:format("unkown:~p~n", [_Info]),
     {noreply, State}.
@@ -107,15 +140,33 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-add_run(#state{run = Run} = State, Pid, Ref, Cmd, MS, EndTime) ->
-    NRun = lists:keysort(1, [{MS + EndTime, Pid, Ref, Cmd} | Run]),
-    State#state{run = NRun, echo = MS}.
 
-handle_time_out([], _MS) ->
-    [];
-handle_time_out([{EndTime, _, _, _} | _T] = L, MS) when EndTime > MS ->
-    L;
-handle_time_out([{EndTime, Pid, Ref, Cmd} | T], MS) ->
-    erlang:exit(Pid, 'kill'),
-    log_lib:error(Pid, [{EndTime, Ref, Cmd}]),
-    handle_time_out(T, MS).
+del_timer(Ref) when is_reference(Ref) ->
+    erlang:cancel_timer(Ref);
+del_timer(_) ->
+    ok.
+
+
+modify_attr([], Attr) ->
+    Attr;
+modify_attr([{K, V} | T], Attr) ->
+    modify_attr(T, maps:put(K, V, Attr));
+modify_attr([_ | T], Attr) ->
+    modify_attr(T, Attr).
+
+
+%%空闲,直接执行
+queue_run(#state{current = none, attr = Attr} = State, Req) ->
+    Parent = self(),
+    {Pid, Ref} = spawn_monitor(fun() ->
+        AddAttr = protocol_routing:try_run(State, Attr, Req),
+        user_process:add_attr(Parent, AddAttr)
+    end),
+    erlang:start_timer(element(6, Req), self(), 'current_timout'),
+    State#state{current = {Pid, Ref, Req}};
+%%放入队列等待
+queue_run(#state{req_queue = Queue} = State, Req) ->
+    State#state{req_queue = queue:in(Req, Queue)}.
+
+
+

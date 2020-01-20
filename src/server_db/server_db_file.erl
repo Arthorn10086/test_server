@@ -309,14 +309,14 @@ batch_write(DBName, Ets, Fields, KeyName, KeyType) ->
 
 
 remove_cold_data(State, MS) ->
-    #state{ets = Ets, cahce_tactics = Tactics} = State,
+    #state{ets = Ets, cahce_tactics = Tactics, cahce_time = CTime} = State,
     case is_behind(Tactics) of
         true ->%清理缓存的时候要同步数据库
-            remove_time_out1(State, MS),
+            remove_time_out1(State, MS - CTime),
             remove_overflow(State, MS);
         false ->
             %%过期数据
-            remove_time_out(Ets, MS),
+            remove_time_out(Ets, MS - CTime),
             %%溢出数据
             remove_overflow(State, MS)
 
@@ -369,7 +369,7 @@ remove_overflow(State, MS) ->
                 erlang:setelement(I, R, erlang:element(I, R) + 1)
             end, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, Ets),
             %%计算删除的时间点
-            Time = get_remove_time(TimeRange, Range, RetainSize, tuple_size(TimeRange), 0, 0),
+            Time = get_remove_time(TimeRange, Range, Size - RetainSize, tuple_size(TimeRange), 0, 0),
             case is_behind(Tactics) of
                 true ->
                     remove_time_out1(State, MS - Time);
