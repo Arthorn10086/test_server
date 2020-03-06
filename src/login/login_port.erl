@@ -28,7 +28,7 @@ login(_A, _Session, _Attr, Msg) ->
     {ok, Maps, _, _} = server_db_client:get('user', UserName, none),
     case check_lib:check_all(['exist', {'password', Password}], {?MODULE, check}, 'login', Maps) of
         true ->
-            {ok, [], #loginResp{now_ms = 111,role_info = []}};
+            {ok, [], #loginResp{now_ms = 111, role_info = []}};
         Err ->
             {error, [], Err}
     end.
@@ -41,8 +41,8 @@ login(_A, _Session, _Attr, Msg) ->
 %% @end
 %% ----------------------------------------------------
 check('exist', 'login', Maps) ->
-    check_lib:get_bool_value(Maps =/= none, "no_exist_user");
+    check_lib:get_bool_value(Maps =/= none, true, "no_exist_user");
 check({'password', PW}, 'login', Maps) ->
-    check_lib:get_bool_value(maps:get('password', Maps) =:= PW, "password_error");
+    check_lib:get_bool_value(maps:get('password', Maps) =:= PW, true, "password_error");
 check(_, _, _) ->
     "undefined_condition".

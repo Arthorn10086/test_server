@@ -41,6 +41,7 @@ get_zero_second() ->
     {_, {H, M, S}} = calendar:now_to_local_time({TM, TS, MS}),
     Now - (H * 60 * 60 + M * 60 + S).
 
+
 %%%===================LOCAL FUNCTIONS==================
 %% ----------------------------------------------------
 %% @doc  

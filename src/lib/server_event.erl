@@ -4,7 +4,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, inform/3, set/3, delete/1]).
+-export([start_link/0, inform/2, set/3, delete/1]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -25,13 +25,13 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-inform(Src, Mark, Args) ->
-    case config_lib:get(?MODULE, {Src, Mark}) of
+inform(Mark, Args) ->
+    case config_lib:get(?MODULE, Mark) of
         {_, {M, F, A}, 0} ->%%同步事件
-            run(M, F, A, Src, Mark, Args),
+            run(M, F, A, Mark, Args),
             ok;
         {_, {M, F, A}, TimeOut} ->%%异步事件
-            gen_server:call(?MODULE, {inform, Src, Mark, Args, {M, F, A}, TimeOut});
+            gen_server:call(?MODULE, {inform, Mark, Args, {M, F, A}, TimeOut});
         _ ->
             ok
     end.
@@ -48,9 +48,9 @@ init([]) ->
     erlang:send_after(?INTERVAL, self(), 'handle_time_out'),
     {ok, #state{ets = Ets, run_list = []}}.
 
-handle_call({inform, Src, Mark, Args, {M, F, A}, TimeOut}, _From, #state{run_list = L} = State) ->
+handle_call({inform, Mark, Args, {M, F, A}, TimeOut}, _From, #state{run_list = L} = State) ->
     MS = time_lib:now_millisecond(),
-    {Pid, Ref} = spawn_monitor(fun() -> run(M, F, A, Src, Mark, Args) end),
+    {Pid, Ref} = spawn_monitor(fun() -> run(M, F, A, Mark, Args) end),
     EndTime = MS + TimeOut,
     NL = [{{Pid, Ref}, Mark, Args, {M, F, A}, EndTime} | L],
     {reply, ok, State#state{run_list = NL}};
@@ -97,9 +97,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-run(M, F, A, Src, Mark, Args) ->
+run(M, F, A, Mark, Args) ->
     try
-        M:F(A, Src, Mark, Args),
+        M:F(A, Mark, Args),
         ok
     catch
         E1: E2 ->

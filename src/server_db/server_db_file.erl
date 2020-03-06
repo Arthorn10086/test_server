@@ -77,7 +77,7 @@ init({ID, Name, Options}) ->
             SizeOut = CachaSize * 1024 div erlang:system_info(wordsize),
             gen_server:enter_loop(?MODULE, [],
                 #state{db_name = Name, interval = InterVal, key = {KeyName, KeyType}, ets = Ets, key_ets = KeyEts,
-                    fields = FieldL, cahce_time = CacheTime, cahce_size = SizeOut, cahce_tactics = Tactics, write_ref = Ref, cahce_ref = CahceRef}, {local, ID})
+                    fields = lists:reverse(FieldL, []), cahce_time = CacheTime, cahce_size = SizeOut, cahce_tactics = Tactics, write_ref = Ref, cahce_ref = CahceRef}, {local, ID})
     end.
 
 

@@ -5,7 +5,7 @@
 -author("yhw").
 
 %%%=======================EXPORT=======================
--export([check_all/4, get_bool_value/2]).
+-export([check_all/4, get_bool_value/3]).
 
 %%%=======================INCLUDE======================
 
@@ -36,10 +36,10 @@ check_all([Conditon | T], MF, Args, Input) ->
 
 
 
-get_bool_value(true, _Err) ->
-    true;
-get_bool_value(false, Err) ->
-    Err.
+get_bool_value(true, R1,_R2) ->
+    R1;
+get_bool_value(false, _R1,R2) ->
+    R2.
 
 %%%===================LOCAL FUNCTIONS==================
 %% ----------------------------------------------------

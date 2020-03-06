@@ -30,6 +30,39 @@ test_update(Tab, Key, Key1, Value) ->
     end,
     server_db_client:update(Tab, Key, F, [], []).
 
+test_lock() ->
+    fun() ->
+        spawn(fun() ->
+            server_db_client:update(user, 11, fun(V, _Args) ->
+                timer:sleep(3500),
+                NV = maps:put(password, "test", V),
+                {ok, NV, NV}
+            end, [], [])
+        end),
+        timer:sleep(100),
+        spawn(fun() ->
+            server_db_client:update(user, 11, fun(V, _) ->
+                NV = maps:put(password, "test11", V),
+                {ok, NV, NV}
+            end, [], [])
+
+        end),
+        io:format("~p~n", [server_db_client:get(user, 11, [])]),
+        timer:sleep(1000),
+        io:format("~p~n", [server_db_client:get(user, 11, [])]),
+        timer:sleep(1000),
+        io:format("~p~n", [server_db_client:get(user, 11, [])]),
+        timer:sleep(1000),
+        io:format("~p~n", [server_db_client:get(user, 11, [])]),
+        timer:sleep(1000),
+        io:format("~p~n", [server_db_client:get(user, 11, [])]),
+        timer:sleep(1000),
+        io:format("~p~n", [server_db_client:get(user, 11, [])]),
+        timer:sleep(1000),
+        io:format("~p~n", [server_db_client:get(user, 11, [])])
+    end,
+    ok.
+
 
 %%test_transaction() ->
 %%    F1 = fun(_Args, [{Index1, V}, {Index2, V2}]) ->

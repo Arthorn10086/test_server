@@ -66,6 +66,7 @@ route(Bin) ->
     {_, Data} = lists:keyfind('data', 1, R),
     {_, MFAList, ErrorLog, {PbMod, Req}, Timeout} = config_lib:get('tcp_protocol', Cmd),
     Data1 = PbMod:decode_msg(Data, Req),
+    statistics_protocol(Cmd),
     {Data1, Serial, MFAList, ErrorLog, PbMod, Timeout}.
 
 
@@ -102,4 +103,13 @@ try_run(Session, Attr, {Data, Serial, MFAList, {LogM, LogF, _}, PbMod, _}) ->
             LogM:LogF(self(), lager:pr_stacktrace(erlang:get_stacktrace(), {E1, E2})),
             Error = encode_reply(error, Serial, erlang:get_stacktrace(), PbMod),
             user_process:send(Session, Error)
+    end.
+
+
+statistics_protocol(Cmd) ->
+    case whereis('statistics_tool') of
+        P when is_pid(P) ->
+            P ! {'protocol', Cmd};
+        _ ->
+            ok
     end.
