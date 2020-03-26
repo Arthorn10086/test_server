@@ -174,7 +174,7 @@ timer_run(Ets, RunL, NowM) ->
                                 M:F(A, Ref, MS)
                             catch
                                 E1: E2 ->
-                                    lager:error("~nStacktrace:~s", [lager:pr_stacktrace(erlang:get_stacktrace(), {E1, E2})])
+                                    lager:log(error, self(), "Stacktrace:~s", [lager:pr_stacktrace(erlang:get_stacktrace(), {E1, E2})])
                             end
                         end),
                         ets:insert(Ets, {Ref, MFA, TimeInfo, NextTime, ?RUNING}),

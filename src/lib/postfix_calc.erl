@@ -39,7 +39,7 @@ mid2postfix([$+ | T], S1, S2, Temp) ->
     mid2postfix(T, NS1, NS2, []);
 mid2postfix([$- | T], S1, S2, Temp) ->
     {NS1, NS2} = pop($-, S1, operand(Temp, S2)),
-    mid2postfix(T, NS1, NS2, Temp);
+    mid2postfix(T, NS1, NS2, []);
 mid2postfix([$* | T], S1, S2, Temp) ->
     {NS1, NS2} = pop($*, S1, operand(Temp, S2)),
     mid2postfix(T, NS1, NS2, []);
@@ -56,7 +56,14 @@ mid2postfix([], S1, S2, Temp) ->
 %% @end
 %% ----------------------------------------------------
 postfix_view(List) ->
-    lists:flatten([V || {_, V} <- List]).
+    lists:flatten([begin
+        if
+            Type =:= 'operator' ->
+                V;
+            true ->
+                integer_to_list(V)++" "
+        end
+    end || {Type, V} <- List]).
 %% ----------------------------------------------------
 %% @doc
 %%     后缀表达式计算
@@ -102,13 +109,13 @@ pop_priority(_, _) ->
 %% @end
 %% ----------------------------------------------------
 calc($*, [V1, V2 | L]) ->
-    [list_to_integer(V1) * list_to_integer(V2) | L];
+    [V2 * V1 | L];
 calc($/, [V1, V2 | L]) ->
-    [list_to_integer(V1) / list_to_integer(V2) | L];
+    [V2 / V1 | L];
 calc($+, [V1, V2 | L]) ->
-    [list_to_integer(V1) + list_to_integer(V2) | L];
+    [V2 + V1 | L];
 calc($-, [V1, V2 | L]) ->
-    [list_to_integer(V1) - list_to_integer(V2) | L].
+    [V2 - V1 | L].
 %% ----------------------------------------------------
 %% @doc
 %%      栈操作
@@ -139,4 +146,4 @@ pop(Operator, [], S2) ->
 operand([], S2) ->
     S2;
 operand(Temp, S2) ->
-    [{'operand', lists:reverse(Temp)} | S2].
+    [{'operand', list_to_integer(lists:reverse(Temp))} | S2].

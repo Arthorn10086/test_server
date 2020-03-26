@@ -56,7 +56,6 @@ set_echo(State, Echo) ->
 %%%===================================================================
 init({Ref, Socket, Transport, _Opts = []}) ->
     ok = ranch:accept_ack(Ref),
-    register(test_user, self()),
     ok = Transport:setopts(Socket, [{active, once}]),
     gen_server:enter_loop(?MODULE, [],
         #state{socket = Socket, transport = Transport, req_queue = queue:new(), current = none}, ?TIMEOUT).
@@ -119,14 +118,14 @@ handle_info({timeout, Ref, 'current_timout'}, #state{req_queue = Queue, current 
     erlang:exit(Pid, kill),
     case queue:out(Queue) of
         {empty, _Q} ->
-            {noreply, State#state{current = none,timeout_ref = none}, ?TIMEOUT};
+            {noreply, State#state{current = none, timeout_ref = none}, ?TIMEOUT};
         {{value, Req}, Q} ->
             NState = queue_run(State#state{current = none}, Req),
             {noreply, NState#state{req_queue = Q}}
     end;
 
 handle_info(_Info, #state{socket = _Socket, transport = _Transport} = State) ->
-    lager:log(info,self(), "unkown:~p~n", [_Info]),
+    lager:log(info, self(), "unkown:~p~n", [_Info]),
     {noreply, State}.
 
 

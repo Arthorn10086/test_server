@@ -60,14 +60,19 @@ encode_reply(Status, Serial, Data, PbMod) ->
 %% @end
 %% ----------------------------------------------------
 route(Bin) ->
-    R = decode(Bin),
-    {_, Cmd} = lists:keyfind('protocol', 1, R),
-    {_, Serial} = lists:keyfind('serial', 1, R),
-    {_, Data} = lists:keyfind('data', 1, R),
-    {_, MFAList, ErrorLog, {PbMod, Req}, Timeout} = config_lib:get('tcp_protocol', Cmd),
-    Data1 = PbMod:decode_msg(Data, Req),
-    statistics_protocol(Cmd),
-    {Data1, Serial, MFAList, ErrorLog, PbMod, Timeout}.
+    try
+        R = decode(Bin),
+        {_, Cmd} = lists:keyfind('protocol', 1, R),
+        {_, Serial} = lists:keyfind('serial', 1, R),
+        {_, Data} = lists:keyfind('data', 1, R),
+        {_, MFAList, ErrorLog, {PbMod, Req}, Timeout} = config_lib:get('tcp_protocol', Cmd),
+        Data1 = PbMod:decode_msg(Data, Req),
+        statistics_protocol(Cmd),
+        {Data1, Serial, MFAList, ErrorLog, PbMod, Timeout}
+    catch
+        Class:Reason ->
+            lager:log(error, self(), "~s", [lager:pr_stacktrace(erlang:get_stacktrace(), {Class, Reason})])
+    end.
 
 
 %%%===================LOCAL FUNCTIONS==================

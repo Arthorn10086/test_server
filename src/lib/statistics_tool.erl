@@ -63,7 +63,7 @@ handle_info({'timeout', _Ref, 'write_file'}, #state{ets = Ets, file = FileInfo} 
         file:write_file(FileName, io_lib:format("~p.~n~n", [Info]), [append])
     catch
         E1:E2 ->
-            lager:log(error, self(), [{data, Info}, {strace, lager:pr_stacktrace(erlang:get_stacktrace(), {E1, E2})}])
+            lager:log(error, self(), "~s~s", [Info, lager:pr_stacktrace(erlang:get_stacktrace(), {E1, E2})])
     end,
     Now = time_lib:now_second(),
     ZeroTime = time_lib:get_zero_second(),
