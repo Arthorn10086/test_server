@@ -10,9 +10,11 @@
                 sasl,
                 ranch,
                 mysql_poolboy,
-                lager
+                lager,
+                cowboy,
+                eredis_pool
             ]},
-        {env, [{cfg_path, "./config"}, {port, 7620}, {db_cache_tactics, write_behind}]},
+        {env, [{http_port, 8081}, {cfg_path, "./config"}, {tcp_port, 7621}, {db_cache_tactics, write_behind}]},
         {modules, []},
 
         {licenses, ["Apache 2.0"]},

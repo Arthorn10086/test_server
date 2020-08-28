@@ -34,7 +34,6 @@
 %%--------------------------------------------------------------------
 start_link(ID, Name, Options) ->
     {ok, proc_lib:spawn_link(?MODULE, init, [{ID, Name, Options}])}.
-%%    gen_server:start_link({local, ID}, ?MODULE, [{Name, Options}], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -255,9 +254,7 @@ get_update_values(Fields, Value, OldValue) ->
 
 %%组装Update语句
 get_update_sql(DBName, KeyName, KeyType, Fields) ->
-    [_ | R] = lists:flatten(lists:map(fun(Field) ->
-        "," ++ atom_to_list(Field) ++ "= ?"
-    end, Fields)),
+    R = make_conn_sql(Fields,[]),
     Clause = case KeyType of
         integer ->
             "=?";
@@ -286,25 +283,25 @@ to_params(Fields, KVL) ->
 batch_write(DBName, Ets, Fields, KeyName, KeyType) ->
     ReplacePrepare = get_replace_prepare(DBName, Fields),
     DelPrepare = get_delete_prepare(DBName, KeyName, KeyType),
-    Conn = poolboy:checkout(?POOLNAME2),
-    {ok, I1} = mysql:prepare(Conn, ReplacePrepare),
-    {ok, I2} = mysql:prepare(Conn, DelPrepare),
-    F = fun({_, _, _, 0}, _Acc) ->
-        ok;
-        ({Key, 'delete', 0, 1}, _Acc) ->
-            mysql:execute(Conn, I2, [Key]),
-            ets:delete(Ets, Key),
+    poolboy:transaction(?POOLNAME2, fun(Conn) ->
+        {ok, I1} = mysql:prepare(Conn, ReplacePrepare),
+        {ok, I2} = mysql:prepare(Conn, DelPrepare),
+        F = fun({_, _, _, 0}, _Acc) ->
             ok;
-        ({Key, Maps, _Time, _Version}, _Acc) ->
-            Params = to_params(Fields, maps:to_list(Maps)),
-            mysql:execute(Conn, I1, Params),
-            ets:update_element(Ets, Key, {4, 0}),
-            ok
-    end,
-    ets:foldl(F, [], Ets),
-    mysql:unprepare(Conn, I1),
-    mysql:unprepare(Conn, I2),
-    poolboy:checkin(?POOLNAME2, Conn),
+            ({Key, 'delete', 0, 1}, _Acc) ->
+                mysql:execute(Conn, I2, [Key]),
+                ets:delete(Ets, Key),
+                ok;
+            ({Key, Maps, _Time, _Version}, _Acc) ->
+                Params = to_params(Fields, maps:to_list(Maps)),
+                mysql:execute(Conn, I1, Params),
+                ets:update_element(Ets, Key, {4, 0}),
+                ok
+        end,
+        ets:foldl(F, [], Ets),
+        mysql:unprepare(Conn, I1),
+        mysql:unprepare(Conn, I2)
+    end, 10000),
     ok.
 
 
@@ -336,18 +333,18 @@ remove_time_out1(State, MS) ->
     remove_time_out(Ets, MS),
     ReplacePrepare = get_replace_prepare(DBName, Fields),
     DelPrepare = get_delete_prepare(DBName, KeyName, KeyType),
-    Conn = poolboy:checkout(?POOLNAME2),
-    {ok, I1} = mysql:prepare(Conn, ReplacePrepare),
-    {ok, I2} = mysql:prepare(Conn, DelPrepare),
-    lists:foreach(fun({Key, 'delete'}) ->
-        mysql:execute(Conn, I2, [Key]);
-        ({_, Maps}) ->
-            Params = to_params(Fields, maps:to_list(Maps)),
-            mysql:execute(Conn, I1, Params)
-    end, UpdateL),
-    mysql:unprepare(Conn, I1),
-    mysql:unprepare(Conn, I2),
-    poolboy:checkin(?POOLNAME2, Conn),
+    poolboy:transaction(?POOLNAME2, fun(Conn) ->
+        {ok, I1} = mysql:prepare(Conn, ReplacePrepare),
+        {ok, I2} = mysql:prepare(Conn, DelPrepare),
+        lists:foreach(fun({Key, 'delete'}) ->
+            mysql:execute(Conn, I2, [Key]);
+            ({_, Maps}) ->
+                Params = to_params(Fields, maps:to_list(Maps)),
+                mysql:execute(Conn, I1, Params)
+        end, UpdateL),
+        mysql:unprepare(Conn, I1),
+        mysql:unprepare(Conn, I2)
+    end, 10000),
     ok.
 
 %%溢出
@@ -392,3 +389,14 @@ get_remove_time(_TimeRange, Range, RetainSize, I, OldCount, NewCount) when NewCo
 get_remove_time(TimeRange, Range, RetainSize, I, _OldCount, NewCount) ->
     Add = element(I, TimeRange),
     get_remove_time(TimeRange, Range, RetainSize, I - 1, NewCount, NewCount + Add).
+
+
+
+make_conn_sql([], L) ->
+    L;
+make_conn_sql([F | T1], []) ->
+    L = [F, " = '?'"],
+    make_conn_sql(T1, L);
+make_conn_sql([F | T1], L) ->
+    L1 = L ++ [",", F, " = '?'"],
+    make_conn_sql(T1, L1).

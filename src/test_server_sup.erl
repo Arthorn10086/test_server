@@ -32,11 +32,8 @@ start_link() ->
 %% Before OTP 18 tuples must be used to specify a child. e.g.
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-    {ok, Port} = application:get_env(port),
-    {ok, Path} = application:get_env(cfg_path),
     {ok, CacheTactics} = application:get_env(db_cache_tactics),
-    {ok, _} = ranch:start_listener(user_process,
-        ranch_tcp, [{port, Port}], user_process, []),
+    {ok, Path} = application:get_env(cfg_path),
     Child1 = #{id => config_lib,
         start => {config_lib, start_link, []},
         shutdown => brutal_kill},

@@ -5,7 +5,7 @@
 -author("yhw").
 
 %%%=======================EXPORT=======================
--export([test_update/4, test_client/0, test_send/4]).
+-export([test_update/4, test_client/0, test_send/4, add/3]).
 
 %%%=======================INCLUDE======================
 
@@ -86,6 +86,11 @@ test_send(C, P, S, D) ->
 %%            io:format("~p~n", [Info])
 %%    end.
 
+
+add(_, Q, Msg) ->
+    A = list_to_integer(list_lib:get_value("a", 1, Msg, "0")),
+    B = list_to_integer(list_lib:get_value("b", 1, Msg, "0")),
+    {ok, Q, [{reply, A + B}]}.
 
 %%%===================LOCAL FUNCTIONS==================
 %% ----------------------------------------------------

@@ -159,7 +159,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%执行
 timer_run(Ets, RunL, NowM) ->
-    F = fun({Ref, MFA, TimeInfo, NextTime, Flag}, {MS, RunList} = Acc) ->
+    Fun = fun({Ref, MFA, TimeInfo, NextTime, Flag}, {MS, RunList} = Acc) ->
         Bool = Flag =:= ?RUNING orelse lists:keyfind(Ref, 2, RunList) =/= false,
         if
             Bool ->
@@ -184,7 +184,7 @@ timer_run(Ets, RunL, NowM) ->
                 end
         end
     end,
-    foldl(F, {NowM, RunL}, Ets).
+    foldl(Fun, {NowM, RunL}, Ets).
 
 
 %%遍历Ets表

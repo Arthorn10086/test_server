@@ -209,7 +209,7 @@ handle_({'config', {TableName, KVList, Options}}, Reply) ->
     NReply = lists:keystore('config', 1, Reply, {'config', NCFGL1}),
     NReply;
 %%通讯协议
-handle_({Type, {Ref, MFAList, LogFun, PB, TimeOut}}, Reply) when Type =:= 'tcp_protocol' ->
+handle_({Type, {Ref, MFAList, LogFun, PB, TimeOut}}, Reply) when Type =:= 'tcp_protocol' orelse Type =:= 'http_protocol' ->
     config_lib:set(Type, {Ref, MFAList, LogFun, PB, TimeOut}),
     ProL = list_lib:get_value(Type, 1, Reply, []),
     NReply = lists:keystore(Type, 1, Reply, {Type, [Ref | ProL]}),
@@ -293,7 +293,7 @@ update_delete(NewCfgList, OldCfgList) ->
             end
         end,
         lists:foreach(ProF, list_lib:get_value(Type, 1, OldCfgList, []))
-    end, ['tcp_protocol']),
+    end, ['tcp_protocol', 'http_protocol']),
     %%event timer
     lists:foreach(fun(Type) ->
         NProL = list_lib:get_value(Type, 1, NewCfgList, []),
