@@ -1,35 +1,37 @@
--module(log_lib).
+-module(test_rd).
 
 %%%=======================STATEMENT====================
--description("log_lib").
--author("yhw").
+-description("test_rd").
+-copyright('youkia,www.youkia.net').
+-author("yhw,yanghaiwei@youkia.net").
+-vsn(2.8).
 
 %%%=======================EXPORT=======================
--export([info/2, error/2]).
+-export([get/1]).
 
 %%%=======================INCLUDE======================
 
 %%%=======================DEFINE======================
-
 %%%=======================RECORD=======================
-
+-record(tr,{
+    id,
+    user,
+    pw,
+    info = 1
+}).
 %%%=======================TYPE=========================
 %%-type my_type() :: atom() | integer().
 
 
 %%%=================EXPORTED FUNCTIONS=================
 %% ----------------------------------------------------
-%% @doc  
-%%        
+%% @doc
+%%
 %% @end
 %% ----------------------------------------------------
-info(Pid, Data) ->
-    lager:log(info, Pid, "~p~n", Data),
-    ok.
-error(Pid, Data) ->
-    lager:log(error, Pid, "~p~n", Data),
-    ok.
-
+%%-spec my_function(Args1::integer()) -> integer().
+get(A)->
+    A.
 
 %%%===================LOCAL FUNCTIONS==================
 %% ----------------------------------------------------

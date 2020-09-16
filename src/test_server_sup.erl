@@ -32,7 +32,6 @@ start_link() ->
 %% Before OTP 18 tuples must be used to specify a child. e.g.
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-    {ok, CacheTactics} = application:get_env(db_cache_tactics),
     {ok, Path} = application:get_env(cfg_path),
     Child1 = #{id => config_lib,
         start => {config_lib, start_link, []},
@@ -43,14 +42,10 @@ init([]) ->
     Child3 = #{id => server_timer,
         start => {server_timer, start_link, []},
         shutdown => brutal_kill},
-    Child4 = #{id => server_db,
-        start => {server_db, start_link, [CacheTactics]},
-        shutdown => brutal_kill,
-        type => supervisor},
-    Child5 = #{id => file_monitor,
+    Child4 = #{id => file_monitor,
         start => {file_monitor, start_link, [Path]},
         shutdown => brutal_kill},
-    {ok, {{one_for_all, 3, 10}, [Child1, Child2, Child3, Child4, Child5]}}.
+    {ok, {{one_for_all, 3, 10}, [Child1, Child2, Child3, Child4]}}.
 
 %%====================================================================
 %% Internal functions

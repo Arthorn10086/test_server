@@ -8,8 +8,8 @@
                 kernel,
                 stdlib,
                 sasl,
+                erl_gs_db,
                 ranch,
-                mysql_poolboy,
                 lager,
                 cowboy,
                 eredis_pool

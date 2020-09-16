@@ -10,42 +10,42 @@
 -ifndef('REGREQ_PB_H').
 -define('REGREQ_PB_H', true).
 -record('RegReq',
-        {user                   :: non_neg_integer(), % = 1, 32 bits
-         password               :: iodata()         % = 2
+        {user                   :: non_neg_integer() | undefined, % = 1, 32 bits
+         password               :: iodata() | undefined % = 2
         }).
 -endif.
 
 -ifndef('REGRESP_PB_H').
 -define('REGRESP_PB_H', true).
 -record('RegResp',
-        {status                 :: non_neg_integer() % = 1, 32 bits
+        {status                 :: non_neg_integer() | undefined % = 1, 32 bits
         }).
 -endif.
 
 -ifndef('LOGINREQ_PB_H').
 -define('LOGINREQ_PB_H', true).
 -record('LoginReq',
-        {user                   :: non_neg_integer(), % = 1, 32 bits
-         password               :: iodata()         % = 2
+        {user                   :: non_neg_integer() | undefined, % = 1, 32 bits
+         password               :: iodata() | undefined % = 2
+        }).
+-endif.
+
+-ifndef('LOGINRESP.ROLEINFO_PB_H').
+-define('LOGINRESP.ROLEINFO_PB_H', true).
+-record('loginResp.RoleInfo',
+        {role_uid               :: non_neg_integer() | undefined, % = 1, 32 bits
+         role_name              :: iodata() | undefined, % = 2
+         role_lv                :: non_neg_integer() | undefined, % = 3, 32 bits
+         profession             :: non_neg_integer() | undefined, % = 4, 32 bits
+         figure                 :: non_neg_integer() | undefined % = 5, 32 bits
         }).
 -endif.
 
 -ifndef('LOGINRESP_PB_H').
 -define('LOGINRESP_PB_H', true).
 -record(loginResp,
-        {now_ms                 :: non_neg_integer(), % = 1, 32 bits
-         role_info = []         :: [login_pb:'RoleInfo'()] | undefined % = 2
-        }).
--endif.
-
--ifndef('ROLEINFO_PB_H').
--define('ROLEINFO_PB_H', true).
--record('RoleInfo',
-        {role_uid               :: non_neg_integer(), % = 1, 32 bits
-         role_name              :: iodata(),        % = 2
-         role_lv                :: non_neg_integer(), % = 3, 32 bits
-         profession             :: non_neg_integer(), % = 4, 32 bits
-         figure                 :: non_neg_integer() % = 5, 32 bits
+        {now_ms                 :: non_neg_integer() | undefined, % = 1, 32 bits
+         role_info = []         :: [login_pb:'loginResp.RoleInfo'()] | undefined % = 2
         }).
 -endif.
 

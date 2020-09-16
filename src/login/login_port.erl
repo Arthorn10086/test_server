@@ -26,9 +26,19 @@
 login(_A, _Session, _Attr, Msg) ->
     #'LoginReq'{user = UserName, password = Password} = Msg,
     {ok, Maps, _, _} = server_db_client:get('user', UserName, none),
-    case check_lib:check_all(['exist', {'password', Password}], {?MODULE, check}, 'login', Maps) of
+    case check_lib:check_all(['exist', {'password', binary_to_list(Password)}], {?MODULE, check}, 'login', Maps) of
         true ->
-            {ok, [], #loginResp{now_ms = 111, role_info = []}};
+            RoleUidL = maps:get('role', Maps),
+            RoleInfoL = lists:foldl(fun(RoleUid, Acc) ->
+                {_, RoleData, _, _} = server_db_client:get('role', RoleUid, none),
+                case RoleData =:= none of
+                    true ->
+                        Acc;
+                    false ->
+                        [record_util:map2record('loginResp.RoleInfo', RoleData) | Acc]
+                end
+            end, [], RoleUidL),
+            {ok, [], #loginResp{now_ms = time_lib:now_millisecond(), role_info = lists:reverse(RoleInfoL)}};
         Err ->
             {error, [], Err}
     end.

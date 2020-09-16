@@ -35,7 +35,7 @@ sync_cmd(UserName, Cmd, ReqRecord, PB, RespRecord) ->
 %% ----------------------------------------------------
 init(UserName, Password) ->
     register(list_to_atom("test_client" ++ integer_to_list(UserName)), self()),
-    {_, C} = gen_tcp:connect("localhost", 7620, [binary, {active, true}, {packet, 0}]),
+    {_, C} = gen_tcp:connect("localhost", 7621, [binary, {active, true}, {packet, 0}]),
     gen_tcp:controlling_process(C, self()),
     Serial = time_lib:now_millisecond(),
     D = protocol_routing:encode(1001, Serial, login_pb:encode_msg({'LoginReq', UserName, Password})),

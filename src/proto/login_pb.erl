@@ -58,24 +58,24 @@
 
 -type 'LoginReq'() :: #'LoginReq'{}.
 
+-type 'loginResp.RoleInfo'() :: #'loginResp.RoleInfo'{}.
+
 -type loginResp() :: #loginResp{}.
 
--type 'RoleInfo'() :: #'RoleInfo'{}.
+-export_type(['RegReq'/0, 'RegResp'/0, 'LoginReq'/0, 'loginResp.RoleInfo'/0, 'loginResp'/0]).
 
--export_type(['RegReq'/0, 'RegResp'/0, 'LoginReq'/0, 'loginResp'/0, 'RoleInfo'/0]).
-
--spec encode_msg(#'RegReq'{} | #'RegResp'{} | #'LoginReq'{} | #loginResp{} | #'RoleInfo'{}) -> binary().
+-spec encode_msg(#'RegReq'{} | #'RegResp'{} | #'LoginReq'{} | #'loginResp.RoleInfo'{} | #loginResp{}) -> binary().
 encode_msg(Msg) when tuple_size(Msg) >= 1 ->
     encode_msg(Msg, element(1, Msg), []).
 
--spec encode_msg(#'RegReq'{} | #'RegResp'{} | #'LoginReq'{} | #loginResp{} | #'RoleInfo'{}, atom() | list()) -> binary().
+-spec encode_msg(#'RegReq'{} | #'RegResp'{} | #'LoginReq'{} | #'loginResp.RoleInfo'{} | #loginResp{}, atom() | list()) -> binary().
 encode_msg(Msg, MsgName) when is_atom(MsgName) ->
     encode_msg(Msg, MsgName, []);
 encode_msg(Msg, Opts)
     when tuple_size(Msg) >= 1, is_list(Opts) ->
     encode_msg(Msg, element(1, Msg), Opts).
 
--spec encode_msg(#'RegReq'{} | #'RegResp'{} | #'LoginReq'{} | #loginResp{} | #'RoleInfo'{}, atom(), list()) -> binary().
+-spec encode_msg(#'RegReq'{} | #'RegResp'{} | #'LoginReq'{} | #'loginResp.RoleInfo'{} | #loginResp{}, atom(), list()) -> binary().
 encode_msg(Msg, MsgName, Opts) ->
     case proplists:get_bool(verify, Opts) of
       true -> verify_msg(Msg, MsgName, Opts);
@@ -89,10 +89,11 @@ encode_msg(Msg, MsgName, Opts) ->
 	  encode_msg_RegResp(id(Msg, TrUserData), TrUserData);
       'LoginReq' ->
 	  encode_msg_LoginReq(id(Msg, TrUserData), TrUserData);
+      'loginResp.RoleInfo' ->
+	  'encode_msg_loginResp.RoleInfo'(id(Msg, TrUserData),
+					  TrUserData);
       loginResp ->
-	  encode_msg_loginResp(id(Msg, TrUserData), TrUserData);
-      'RoleInfo' ->
-	  encode_msg_RoleInfo(id(Msg, TrUserData), TrUserData)
+	  encode_msg_loginResp(id(Msg, TrUserData), TrUserData)
     end.
 
 
@@ -102,13 +103,19 @@ encode_msg_RegReq(Msg, TrUserData) ->
 
 encode_msg_RegReq(#'RegReq'{user = F1, password = F2},
 		  Bin, TrUserData) ->
-    B1 = begin
-	   TrF1 = id(F1, TrUserData),
-	   e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+    B1 = if F1 == undefined -> Bin;
+	    true ->
+		begin
+		  TrF1 = id(F1, TrUserData),
+		  e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+		end
 	 end,
-    begin
-      TrF2 = id(F2, TrUserData),
-      e_type_string(TrF2, <<B1/binary, 18>>, TrUserData)
+    if F2 == undefined -> B1;
+       true ->
+	   begin
+	     TrF2 = id(F2, TrUserData),
+	     e_type_string(TrF2, <<B1/binary, 18>>, TrUserData)
+	   end
     end.
 
 encode_msg_RegResp(Msg, TrUserData) ->
@@ -117,9 +124,12 @@ encode_msg_RegResp(Msg, TrUserData) ->
 
 encode_msg_RegResp(#'RegResp'{status = F1}, Bin,
 		   TrUserData) ->
-    begin
-      TrF1 = id(F1, TrUserData),
-      e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+    if F1 == undefined -> Bin;
+       true ->
+	   begin
+	     TrF1 = id(F1, TrUserData),
+	     e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+	   end
     end.
 
 encode_msg_LoginReq(Msg, TrUserData) ->
@@ -129,13 +139,66 @@ encode_msg_LoginReq(Msg, TrUserData) ->
 encode_msg_LoginReq(#'LoginReq'{user = F1,
 				password = F2},
 		    Bin, TrUserData) ->
-    B1 = begin
-	   TrF1 = id(F1, TrUserData),
-	   e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+    B1 = if F1 == undefined -> Bin;
+	    true ->
+		begin
+		  TrF1 = id(F1, TrUserData),
+		  e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+		end
 	 end,
-    begin
-      TrF2 = id(F2, TrUserData),
-      e_type_string(TrF2, <<B1/binary, 18>>, TrUserData)
+    if F2 == undefined -> B1;
+       true ->
+	   begin
+	     TrF2 = id(F2, TrUserData),
+	     e_type_string(TrF2, <<B1/binary, 18>>, TrUserData)
+	   end
+    end.
+
+'encode_msg_loginResp.RoleInfo'(Msg, TrUserData) ->
+    'encode_msg_loginResp.RoleInfo'(Msg, <<>>, TrUserData).
+
+
+'encode_msg_loginResp.RoleInfo'(#'loginResp.RoleInfo'{role_uid
+							  = F1,
+						      role_name = F2,
+						      role_lv = F3,
+						      profession = F4,
+						      figure = F5},
+				Bin, TrUserData) ->
+    B1 = if F1 == undefined -> Bin;
+	    true ->
+		begin
+		  TrF1 = id(F1, TrUserData),
+		  e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+		end
+	 end,
+    B2 = if F2 == undefined -> B1;
+	    true ->
+		begin
+		  TrF2 = id(F2, TrUserData),
+		  e_type_string(TrF2, <<B1/binary, 18>>, TrUserData)
+		end
+	 end,
+    B3 = if F3 == undefined -> B2;
+	    true ->
+		begin
+		  TrF3 = id(F3, TrUserData),
+		  e_varint(TrF3, <<B2/binary, 24>>, TrUserData)
+		end
+	 end,
+    B4 = if F4 == undefined -> B3;
+	    true ->
+		begin
+		  TrF4 = id(F4, TrUserData),
+		  e_varint(TrF4, <<B3/binary, 32>>, TrUserData)
+		end
+	 end,
+    if F5 == undefined -> B4;
+       true ->
+	   begin
+	     TrF5 = id(F5, TrUserData),
+	     e_varint(TrF5, <<B4/binary, 40>>, TrUserData)
+	   end
     end.
 
 encode_msg_loginResp(Msg, TrUserData) ->
@@ -145,9 +208,12 @@ encode_msg_loginResp(Msg, TrUserData) ->
 encode_msg_loginResp(#loginResp{now_ms = F1,
 				role_info = F2},
 		     Bin, TrUserData) ->
-    B1 = begin
-	   TrF1 = id(F1, TrUserData),
-	   e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+    B1 = if F1 == undefined -> Bin;
+	    true ->
+		begin
+		  TrF1 = id(F1, TrUserData),
+		  e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
+		end
 	 end,
     begin
       TrF2 = id(F2, TrUserData),
@@ -157,37 +223,9 @@ encode_msg_loginResp(#loginResp{now_ms = F1,
       end
     end.
 
-encode_msg_RoleInfo(Msg, TrUserData) ->
-    encode_msg_RoleInfo(Msg, <<>>, TrUserData).
-
-
-encode_msg_RoleInfo(#'RoleInfo'{role_uid = F1,
-				role_name = F2, role_lv = F3, profession = F4,
-				figure = F5},
-		    Bin, TrUserData) ->
-    B1 = begin
-	   TrF1 = id(F1, TrUserData),
-	   e_varint(TrF1, <<Bin/binary, 8>>, TrUserData)
-	 end,
-    B2 = begin
-	   TrF2 = id(F2, TrUserData),
-	   e_type_string(TrF2, <<B1/binary, 18>>, TrUserData)
-	 end,
-    B3 = begin
-	   TrF3 = id(F3, TrUserData),
-	   e_varint(TrF3, <<B2/binary, 24>>, TrUserData)
-	 end,
-    B4 = begin
-	   TrF4 = id(F4, TrUserData),
-	   e_varint(TrF4, <<B3/binary, 32>>, TrUserData)
-	 end,
-    begin
-      TrF5 = id(F5, TrUserData),
-      e_varint(TrF5, <<B4/binary, 40>>, TrUserData)
-    end.
-
 e_mfield_loginResp_role_info(Msg, Bin, TrUserData) ->
-    SubBin = encode_msg_RoleInfo(Msg, <<>>, TrUserData),
+    SubBin = 'encode_msg_loginResp.RoleInfo'(Msg, <<>>,
+					     TrUserData),
     Bin2 = e_varint(byte_size(SubBin), Bin),
     <<Bin2/binary, SubBin/binary>>.
 
@@ -321,10 +359,12 @@ decode_msg_2_doit('RegResp', Bin, TrUserData) ->
     id(decode_msg_RegResp(Bin, TrUserData), TrUserData);
 decode_msg_2_doit('LoginReq', Bin, TrUserData) ->
     id(decode_msg_LoginReq(Bin, TrUserData), TrUserData);
+decode_msg_2_doit('loginResp.RoleInfo', Bin,
+		  TrUserData) ->
+    id('decode_msg_loginResp.RoleInfo'(Bin, TrUserData),
+       TrUserData);
 decode_msg_2_doit(loginResp, Bin, TrUserData) ->
-    id(decode_msg_loginResp(Bin, TrUserData), TrUserData);
-decode_msg_2_doit('RoleInfo', Bin, TrUserData) ->
-    id(decode_msg_RoleInfo(Bin, TrUserData), TrUserData).
+    id(decode_msg_loginResp(Bin, TrUserData), TrUserData).
 
 
 
@@ -653,6 +693,264 @@ skip_64_LoginReq(<<_:64, Rest/binary>>, Z1, Z2, F@_1,
     dfp_read_field_def_LoginReq(Rest, Z1, Z2, F@_1, F@_2,
 				TrUserData).
 
+'decode_msg_loginResp.RoleInfo'(Bin, TrUserData) ->
+    'dfp_read_field_def_loginResp.RoleInfo'(Bin, 0, 0,
+					    id(undefined, TrUserData),
+					    id(undefined, TrUserData),
+					    id(undefined, TrUserData),
+					    id(undefined, TrUserData),
+					    id(undefined, TrUserData),
+					    TrUserData).
+
+'dfp_read_field_def_loginResp.RoleInfo'(<<8,
+					  Rest/binary>>,
+					Z1, Z2, F@_1, F@_2, F@_3, F@_4, F@_5,
+					TrUserData) ->
+    'd_field_loginResp.RoleInfo_role_uid'(Rest, Z1, Z2,
+					  F@_1, F@_2, F@_3, F@_4, F@_5,
+					  TrUserData);
+'dfp_read_field_def_loginResp.RoleInfo'(<<18,
+					  Rest/binary>>,
+					Z1, Z2, F@_1, F@_2, F@_3, F@_4, F@_5,
+					TrUserData) ->
+    'd_field_loginResp.RoleInfo_role_name'(Rest, Z1, Z2,
+					   F@_1, F@_2, F@_3, F@_4, F@_5,
+					   TrUserData);
+'dfp_read_field_def_loginResp.RoleInfo'(<<24,
+					  Rest/binary>>,
+					Z1, Z2, F@_1, F@_2, F@_3, F@_4, F@_5,
+					TrUserData) ->
+    'd_field_loginResp.RoleInfo_role_lv'(Rest, Z1, Z2, F@_1,
+					 F@_2, F@_3, F@_4, F@_5, TrUserData);
+'dfp_read_field_def_loginResp.RoleInfo'(<<32,
+					  Rest/binary>>,
+					Z1, Z2, F@_1, F@_2, F@_3, F@_4, F@_5,
+					TrUserData) ->
+    'd_field_loginResp.RoleInfo_profession'(Rest, Z1, Z2,
+					    F@_1, F@_2, F@_3, F@_4, F@_5,
+					    TrUserData);
+'dfp_read_field_def_loginResp.RoleInfo'(<<40,
+					  Rest/binary>>,
+					Z1, Z2, F@_1, F@_2, F@_3, F@_4, F@_5,
+					TrUserData) ->
+    'd_field_loginResp.RoleInfo_figure'(Rest, Z1, Z2, F@_1,
+					F@_2, F@_3, F@_4, F@_5, TrUserData);
+'dfp_read_field_def_loginResp.RoleInfo'(<<>>, 0, 0,
+					F@_1, F@_2, F@_3, F@_4, F@_5, _) ->
+    #'loginResp.RoleInfo'{role_uid = F@_1, role_name = F@_2,
+			  role_lv = F@_3, profession = F@_4, figure = F@_5};
+'dfp_read_field_def_loginResp.RoleInfo'(Other, Z1, Z2,
+					F@_1, F@_2, F@_3, F@_4, F@_5,
+					TrUserData) ->
+    'dg_read_field_def_loginResp.RoleInfo'(Other, Z1, Z2,
+					   F@_1, F@_2, F@_3, F@_4, F@_5,
+					   TrUserData).
+
+'dg_read_field_def_loginResp.RoleInfo'(<<1:1, X:7,
+					 Rest/binary>>,
+				       N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+				       TrUserData)
+    when N < 32 - 7 ->
+    'dg_read_field_def_loginResp.RoleInfo'(Rest, N + 7,
+					   X bsl N + Acc, F@_1, F@_2, F@_3,
+					   F@_4, F@_5, TrUserData);
+'dg_read_field_def_loginResp.RoleInfo'(<<0:1, X:7,
+					 Rest/binary>>,
+				       N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+				       TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+      8 ->
+	  'd_field_loginResp.RoleInfo_role_uid'(Rest, 0, 0, F@_1,
+						F@_2, F@_3, F@_4, F@_5,
+						TrUserData);
+      18 ->
+	  'd_field_loginResp.RoleInfo_role_name'(Rest, 0, 0, F@_1,
+						 F@_2, F@_3, F@_4, F@_5,
+						 TrUserData);
+      24 ->
+	  'd_field_loginResp.RoleInfo_role_lv'(Rest, 0, 0, F@_1,
+					       F@_2, F@_3, F@_4, F@_5,
+					       TrUserData);
+      32 ->
+	  'd_field_loginResp.RoleInfo_profession'(Rest, 0, 0,
+						  F@_1, F@_2, F@_3, F@_4, F@_5,
+						  TrUserData);
+      40 ->
+	  'd_field_loginResp.RoleInfo_figure'(Rest, 0, 0, F@_1,
+					      F@_2, F@_3, F@_4, F@_5,
+					      TrUserData);
+      _ ->
+	  case Key band 7 of
+	    0 ->
+		'skip_varint_loginResp.RoleInfo'(Rest, 0, 0, F@_1, F@_2,
+						 F@_3, F@_4, F@_5, TrUserData);
+	    1 ->
+		'skip_64_loginResp.RoleInfo'(Rest, 0, 0, F@_1, F@_2,
+					     F@_3, F@_4, F@_5, TrUserData);
+	    2 ->
+		'skip_length_delimited_loginResp.RoleInfo'(Rest, 0, 0,
+							   F@_1, F@_2, F@_3,
+							   F@_4, F@_5,
+							   TrUserData);
+	    3 ->
+		'skip_group_loginResp.RoleInfo'(Rest, Key bsr 3, 0,
+						F@_1, F@_2, F@_3, F@_4, F@_5,
+						TrUserData);
+	    5 ->
+		'skip_32_loginResp.RoleInfo'(Rest, 0, 0, F@_1, F@_2,
+					     F@_3, F@_4, F@_5, TrUserData)
+	  end
+    end;
+'dg_read_field_def_loginResp.RoleInfo'(<<>>, 0, 0, F@_1,
+				       F@_2, F@_3, F@_4, F@_5, _) ->
+    #'loginResp.RoleInfo'{role_uid = F@_1, role_name = F@_2,
+			  role_lv = F@_3, profession = F@_4, figure = F@_5}.
+
+'d_field_loginResp.RoleInfo_role_uid'(<<1:1, X:7,
+					Rest/binary>>,
+				      N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+				      TrUserData)
+    when N < 57 ->
+    'd_field_loginResp.RoleInfo_role_uid'(Rest, N + 7,
+					  X bsl N + Acc, F@_1, F@_2, F@_3, F@_4,
+					  F@_5, TrUserData);
+'d_field_loginResp.RoleInfo_role_uid'(<<0:1, X:7,
+					Rest/binary>>,
+				      N, Acc, _, F@_2, F@_3, F@_4, F@_5,
+				      TrUserData) ->
+    {NewFValue, RestF} = {id(X bsl N + Acc, TrUserData),
+			  Rest},
+    'dfp_read_field_def_loginResp.RoleInfo'(RestF, 0, 0,
+					    NewFValue, F@_2, F@_3, F@_4, F@_5,
+					    TrUserData).
+
+'d_field_loginResp.RoleInfo_role_name'(<<1:1, X:7,
+					 Rest/binary>>,
+				       N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+				       TrUserData)
+    when N < 57 ->
+    'd_field_loginResp.RoleInfo_role_name'(Rest, N + 7,
+					   X bsl N + Acc, F@_1, F@_2, F@_3,
+					   F@_4, F@_5, TrUserData);
+'d_field_loginResp.RoleInfo_role_name'(<<0:1, X:7,
+					 Rest/binary>>,
+				       N, Acc, F@_1, _, F@_3, F@_4, F@_5,
+				       TrUserData) ->
+    {NewFValue, RestF} = begin
+			   Len = X bsl N + Acc,
+			   <<Bytes:Len/binary, Rest2/binary>> = Rest,
+			   {id(binary:copy(Bytes), TrUserData), Rest2}
+			 end,
+    'dfp_read_field_def_loginResp.RoleInfo'(RestF, 0, 0,
+					    F@_1, NewFValue, F@_3, F@_4, F@_5,
+					    TrUserData).
+
+'d_field_loginResp.RoleInfo_role_lv'(<<1:1, X:7,
+				       Rest/binary>>,
+				     N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+				     TrUserData)
+    when N < 57 ->
+    'd_field_loginResp.RoleInfo_role_lv'(Rest, N + 7,
+					 X bsl N + Acc, F@_1, F@_2, F@_3, F@_4,
+					 F@_5, TrUserData);
+'d_field_loginResp.RoleInfo_role_lv'(<<0:1, X:7,
+				       Rest/binary>>,
+				     N, Acc, F@_1, F@_2, _, F@_4, F@_5,
+				     TrUserData) ->
+    {NewFValue, RestF} = {id(X bsl N + Acc, TrUserData),
+			  Rest},
+    'dfp_read_field_def_loginResp.RoleInfo'(RestF, 0, 0,
+					    F@_1, F@_2, NewFValue, F@_4, F@_5,
+					    TrUserData).
+
+'d_field_loginResp.RoleInfo_profession'(<<1:1, X:7,
+					  Rest/binary>>,
+					N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+					TrUserData)
+    when N < 57 ->
+    'd_field_loginResp.RoleInfo_profession'(Rest, N + 7,
+					    X bsl N + Acc, F@_1, F@_2, F@_3,
+					    F@_4, F@_5, TrUserData);
+'d_field_loginResp.RoleInfo_profession'(<<0:1, X:7,
+					  Rest/binary>>,
+					N, Acc, F@_1, F@_2, F@_3, _, F@_5,
+					TrUserData) ->
+    {NewFValue, RestF} = {id(X bsl N + Acc, TrUserData),
+			  Rest},
+    'dfp_read_field_def_loginResp.RoleInfo'(RestF, 0, 0,
+					    F@_1, F@_2, F@_3, NewFValue, F@_5,
+					    TrUserData).
+
+'d_field_loginResp.RoleInfo_figure'(<<1:1, X:7,
+				      Rest/binary>>,
+				    N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+				    TrUserData)
+    when N < 57 ->
+    'd_field_loginResp.RoleInfo_figure'(Rest, N + 7,
+					X bsl N + Acc, F@_1, F@_2, F@_3, F@_4,
+					F@_5, TrUserData);
+'d_field_loginResp.RoleInfo_figure'(<<0:1, X:7,
+				      Rest/binary>>,
+				    N, Acc, F@_1, F@_2, F@_3, F@_4, _,
+				    TrUserData) ->
+    {NewFValue, RestF} = {id(X bsl N + Acc, TrUserData),
+			  Rest},
+    'dfp_read_field_def_loginResp.RoleInfo'(RestF, 0, 0,
+					    F@_1, F@_2, F@_3, F@_4, NewFValue,
+					    TrUserData).
+
+'skip_varint_loginResp.RoleInfo'(<<1:1, _:7,
+				   Rest/binary>>,
+				 Z1, Z2, F@_1, F@_2, F@_3, F@_4, F@_5,
+				 TrUserData) ->
+    'skip_varint_loginResp.RoleInfo'(Rest, Z1, Z2, F@_1,
+				     F@_2, F@_3, F@_4, F@_5, TrUserData);
+'skip_varint_loginResp.RoleInfo'(<<0:1, _:7,
+				   Rest/binary>>,
+				 Z1, Z2, F@_1, F@_2, F@_3, F@_4, F@_5,
+				 TrUserData) ->
+    'dfp_read_field_def_loginResp.RoleInfo'(Rest, Z1, Z2,
+					    F@_1, F@_2, F@_3, F@_4, F@_5,
+					    TrUserData).
+
+'skip_length_delimited_loginResp.RoleInfo'(<<1:1, X:7,
+					     Rest/binary>>,
+					   N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+					   TrUserData)
+    when N < 57 ->
+    'skip_length_delimited_loginResp.RoleInfo'(Rest, N + 7,
+					       X bsl N + Acc, F@_1, F@_2, F@_3,
+					       F@_4, F@_5, TrUserData);
+'skip_length_delimited_loginResp.RoleInfo'(<<0:1, X:7,
+					     Rest/binary>>,
+					   N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
+					   TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    'dfp_read_field_def_loginResp.RoleInfo'(Rest2, 0, 0,
+					    F@_1, F@_2, F@_3, F@_4, F@_5,
+					    TrUserData).
+
+'skip_group_loginResp.RoleInfo'(Bin, FNum, Z2, F@_1,
+				F@_2, F@_3, F@_4, F@_5, TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    'dfp_read_field_def_loginResp.RoleInfo'(Rest, 0, Z2,
+					    F@_1, F@_2, F@_3, F@_4, F@_5,
+					    TrUserData).
+
+'skip_32_loginResp.RoleInfo'(<<_:32, Rest/binary>>, Z1,
+			     Z2, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
+    'dfp_read_field_def_loginResp.RoleInfo'(Rest, Z1, Z2,
+					    F@_1, F@_2, F@_3, F@_4, F@_5,
+					    TrUserData).
+
+'skip_64_loginResp.RoleInfo'(<<_:64, Rest/binary>>, Z1,
+			     Z2, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
+    'dfp_read_field_def_loginResp.RoleInfo'(Rest, Z1, Z2,
+					    F@_1, F@_2, F@_3, F@_4, F@_5,
+					    TrUserData).
+
 decode_msg_loginResp(Bin, TrUserData) ->
     dfp_read_field_def_loginResp(Bin, 0, 0,
 				 id(undefined, TrUserData), id([], TrUserData),
@@ -734,7 +1032,8 @@ d_field_loginResp_role_info(<<0:1, X:7, Rest/binary>>,
     {NewFValue, RestF} = begin
 			   Len = X bsl N + Acc,
 			   <<Bs:Len/binary, Rest2/binary>> = Rest,
-			   {id(decode_msg_RoleInfo(Bs, TrUserData), TrUserData),
+			   {id('decode_msg_loginResp.RoleInfo'(Bs, TrUserData),
+			       TrUserData),
 			    Rest2}
 			 end,
     dfp_read_field_def_loginResp(RestF, 0, 0, F@_1,
@@ -778,195 +1077,6 @@ skip_64_loginResp(<<_:64, Rest/binary>>, Z1, Z2, F@_1,
 		  F@_2, TrUserData) ->
     dfp_read_field_def_loginResp(Rest, Z1, Z2, F@_1, F@_2,
 				 TrUserData).
-
-decode_msg_RoleInfo(Bin, TrUserData) ->
-    dfp_read_field_def_RoleInfo(Bin, 0, 0,
-				id(undefined, TrUserData),
-				id(undefined, TrUserData),
-				id(undefined, TrUserData),
-				id(undefined, TrUserData),
-				id(undefined, TrUserData), TrUserData).
-
-dfp_read_field_def_RoleInfo(<<8, Rest/binary>>, Z1, Z2,
-			    F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    d_field_RoleInfo_role_uid(Rest, Z1, Z2, F@_1, F@_2,
-			      F@_3, F@_4, F@_5, TrUserData);
-dfp_read_field_def_RoleInfo(<<18, Rest/binary>>, Z1, Z2,
-			    F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    d_field_RoleInfo_role_name(Rest, Z1, Z2, F@_1, F@_2,
-			       F@_3, F@_4, F@_5, TrUserData);
-dfp_read_field_def_RoleInfo(<<24, Rest/binary>>, Z1, Z2,
-			    F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    d_field_RoleInfo_role_lv(Rest, Z1, Z2, F@_1, F@_2, F@_3,
-			     F@_4, F@_5, TrUserData);
-dfp_read_field_def_RoleInfo(<<32, Rest/binary>>, Z1, Z2,
-			    F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    d_field_RoleInfo_profession(Rest, Z1, Z2, F@_1, F@_2,
-				F@_3, F@_4, F@_5, TrUserData);
-dfp_read_field_def_RoleInfo(<<40, Rest/binary>>, Z1, Z2,
-			    F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    d_field_RoleInfo_figure(Rest, Z1, Z2, F@_1, F@_2, F@_3,
-			    F@_4, F@_5, TrUserData);
-dfp_read_field_def_RoleInfo(<<>>, 0, 0, F@_1, F@_2,
-			    F@_3, F@_4, F@_5, _) ->
-    #'RoleInfo'{role_uid = F@_1, role_name = F@_2,
-		role_lv = F@_3, profession = F@_4, figure = F@_5};
-dfp_read_field_def_RoleInfo(Other, Z1, Z2, F@_1, F@_2,
-			    F@_3, F@_4, F@_5, TrUserData) ->
-    dg_read_field_def_RoleInfo(Other, Z1, Z2, F@_1, F@_2,
-			       F@_3, F@_4, F@_5, TrUserData).
-
-dg_read_field_def_RoleInfo(<<1:1, X:7, Rest/binary>>, N,
-			   Acc, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData)
-    when N < 32 - 7 ->
-    dg_read_field_def_RoleInfo(Rest, N + 7, X bsl N + Acc,
-			       F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData);
-dg_read_field_def_RoleInfo(<<0:1, X:7, Rest/binary>>, N,
-			   Acc, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    Key = X bsl N + Acc,
-    case Key of
-      8 ->
-	  d_field_RoleInfo_role_uid(Rest, 0, 0, F@_1, F@_2, F@_3,
-				    F@_4, F@_5, TrUserData);
-      18 ->
-	  d_field_RoleInfo_role_name(Rest, 0, 0, F@_1, F@_2, F@_3,
-				     F@_4, F@_5, TrUserData);
-      24 ->
-	  d_field_RoleInfo_role_lv(Rest, 0, 0, F@_1, F@_2, F@_3,
-				   F@_4, F@_5, TrUserData);
-      32 ->
-	  d_field_RoleInfo_profession(Rest, 0, 0, F@_1, F@_2,
-				      F@_3, F@_4, F@_5, TrUserData);
-      40 ->
-	  d_field_RoleInfo_figure(Rest, 0, 0, F@_1, F@_2, F@_3,
-				  F@_4, F@_5, TrUserData);
-      _ ->
-	  case Key band 7 of
-	    0 ->
-		skip_varint_RoleInfo(Rest, 0, 0, F@_1, F@_2, F@_3, F@_4,
-				     F@_5, TrUserData);
-	    1 ->
-		skip_64_RoleInfo(Rest, 0, 0, F@_1, F@_2, F@_3, F@_4,
-				 F@_5, TrUserData);
-	    2 ->
-		skip_length_delimited_RoleInfo(Rest, 0, 0, F@_1, F@_2,
-					       F@_3, F@_4, F@_5, TrUserData);
-	    3 ->
-		skip_group_RoleInfo(Rest, Key bsr 3, 0, F@_1, F@_2,
-				    F@_3, F@_4, F@_5, TrUserData);
-	    5 ->
-		skip_32_RoleInfo(Rest, 0, 0, F@_1, F@_2, F@_3, F@_4,
-				 F@_5, TrUserData)
-	  end
-    end;
-dg_read_field_def_RoleInfo(<<>>, 0, 0, F@_1, F@_2, F@_3,
-			   F@_4, F@_5, _) ->
-    #'RoleInfo'{role_uid = F@_1, role_name = F@_2,
-		role_lv = F@_3, profession = F@_4, figure = F@_5}.
-
-d_field_RoleInfo_role_uid(<<1:1, X:7, Rest/binary>>, N,
-			  Acc, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData)
-    when N < 57 ->
-    d_field_RoleInfo_role_uid(Rest, N + 7, X bsl N + Acc,
-			      F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData);
-d_field_RoleInfo_role_uid(<<0:1, X:7, Rest/binary>>, N,
-			  Acc, _, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    {NewFValue, RestF} = {id(X bsl N + Acc, TrUserData),
-			  Rest},
-    dfp_read_field_def_RoleInfo(RestF, 0, 0, NewFValue,
-				F@_2, F@_3, F@_4, F@_5, TrUserData).
-
-d_field_RoleInfo_role_name(<<1:1, X:7, Rest/binary>>, N,
-			   Acc, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData)
-    when N < 57 ->
-    d_field_RoleInfo_role_name(Rest, N + 7, X bsl N + Acc,
-			       F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData);
-d_field_RoleInfo_role_name(<<0:1, X:7, Rest/binary>>, N,
-			   Acc, F@_1, _, F@_3, F@_4, F@_5, TrUserData) ->
-    {NewFValue, RestF} = begin
-			   Len = X bsl N + Acc,
-			   <<Bytes:Len/binary, Rest2/binary>> = Rest,
-			   {id(binary:copy(Bytes), TrUserData), Rest2}
-			 end,
-    dfp_read_field_def_RoleInfo(RestF, 0, 0, F@_1,
-				NewFValue, F@_3, F@_4, F@_5, TrUserData).
-
-d_field_RoleInfo_role_lv(<<1:1, X:7, Rest/binary>>, N,
-			 Acc, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData)
-    when N < 57 ->
-    d_field_RoleInfo_role_lv(Rest, N + 7, X bsl N + Acc,
-			     F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData);
-d_field_RoleInfo_role_lv(<<0:1, X:7, Rest/binary>>, N,
-			 Acc, F@_1, F@_2, _, F@_4, F@_5, TrUserData) ->
-    {NewFValue, RestF} = {id(X bsl N + Acc, TrUserData),
-			  Rest},
-    dfp_read_field_def_RoleInfo(RestF, 0, 0, F@_1, F@_2,
-				NewFValue, F@_4, F@_5, TrUserData).
-
-d_field_RoleInfo_profession(<<1:1, X:7, Rest/binary>>,
-			    N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData)
-    when N < 57 ->
-    d_field_RoleInfo_profession(Rest, N + 7, X bsl N + Acc,
-				F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData);
-d_field_RoleInfo_profession(<<0:1, X:7, Rest/binary>>,
-			    N, Acc, F@_1, F@_2, F@_3, _, F@_5, TrUserData) ->
-    {NewFValue, RestF} = {id(X bsl N + Acc, TrUserData),
-			  Rest},
-    dfp_read_field_def_RoleInfo(RestF, 0, 0, F@_1, F@_2,
-				F@_3, NewFValue, F@_5, TrUserData).
-
-d_field_RoleInfo_figure(<<1:1, X:7, Rest/binary>>, N,
-			Acc, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData)
-    when N < 57 ->
-    d_field_RoleInfo_figure(Rest, N + 7, X bsl N + Acc,
-			    F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData);
-d_field_RoleInfo_figure(<<0:1, X:7, Rest/binary>>, N,
-			Acc, F@_1, F@_2, F@_3, F@_4, _, TrUserData) ->
-    {NewFValue, RestF} = {id(X bsl N + Acc, TrUserData),
-			  Rest},
-    dfp_read_field_def_RoleInfo(RestF, 0, 0, F@_1, F@_2,
-				F@_3, F@_4, NewFValue, TrUserData).
-
-skip_varint_RoleInfo(<<1:1, _:7, Rest/binary>>, Z1, Z2,
-		     F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    skip_varint_RoleInfo(Rest, Z1, Z2, F@_1, F@_2, F@_3,
-			 F@_4, F@_5, TrUserData);
-skip_varint_RoleInfo(<<0:1, _:7, Rest/binary>>, Z1, Z2,
-		     F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    dfp_read_field_def_RoleInfo(Rest, Z1, Z2, F@_1, F@_2,
-				F@_3, F@_4, F@_5, TrUserData).
-
-skip_length_delimited_RoleInfo(<<1:1, X:7,
-				 Rest/binary>>,
-			       N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5, TrUserData)
-    when N < 57 ->
-    skip_length_delimited_RoleInfo(Rest, N + 7,
-				   X bsl N + Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
-				   TrUserData);
-skip_length_delimited_RoleInfo(<<0:1, X:7,
-				 Rest/binary>>,
-			       N, Acc, F@_1, F@_2, F@_3, F@_4, F@_5,
-			       TrUserData) ->
-    Length = X bsl N + Acc,
-    <<_:Length/binary, Rest2/binary>> = Rest,
-    dfp_read_field_def_RoleInfo(Rest2, 0, 0, F@_1, F@_2,
-				F@_3, F@_4, F@_5, TrUserData).
-
-skip_group_RoleInfo(Bin, FNum, Z2, F@_1, F@_2, F@_3,
-		    F@_4, F@_5, TrUserData) ->
-    {_, Rest} = read_group(Bin, FNum),
-    dfp_read_field_def_RoleInfo(Rest, 0, Z2, F@_1, F@_2,
-				F@_3, F@_4, F@_5, TrUserData).
-
-skip_32_RoleInfo(<<_:32, Rest/binary>>, Z1, Z2, F@_1,
-		 F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    dfp_read_field_def_RoleInfo(Rest, Z1, Z2, F@_1, F@_2,
-				F@_3, F@_4, F@_5, TrUserData).
-
-skip_64_RoleInfo(<<_:64, Rest/binary>>, Z1, Z2, F@_1,
-		 F@_2, F@_3, F@_4, F@_5, TrUserData) ->
-    dfp_read_field_def_RoleInfo(Rest, Z1, Z2, F@_1, F@_2,
-				F@_3, F@_4, F@_5, TrUserData).
 
 read_group(Bin, FieldNum) ->
     {NumBytes, EndTagLen} = read_gr_b(Bin, 0, 0, 0, 0, FieldNum),
@@ -1043,46 +1153,94 @@ merge_msgs(Prev, New, MsgName, Opts) ->
       'RegReq' -> merge_msg_RegReq(Prev, New, TrUserData);
       'RegResp' -> merge_msg_RegResp(Prev, New, TrUserData);
       'LoginReq' -> merge_msg_LoginReq(Prev, New, TrUserData);
-      loginResp -> merge_msg_loginResp(Prev, New, TrUserData);
-      'RoleInfo' -> merge_msg_RoleInfo(Prev, New, TrUserData)
+      'loginResp.RoleInfo' ->
+	  'merge_msg_loginResp.RoleInfo'(Prev, New, TrUserData);
+      loginResp -> merge_msg_loginResp(Prev, New, TrUserData)
     end.
 
 -compile({nowarn_unused_function,merge_msg_RegReq/3}).
-merge_msg_RegReq(#'RegReq'{},
+merge_msg_RegReq(#'RegReq'{user = PFuser,
+			   password = PFpassword},
 		 #'RegReq'{user = NFuser, password = NFpassword}, _) ->
-    #'RegReq'{user = NFuser, password = NFpassword}.
+    #'RegReq'{user =
+		  if NFuser =:= undefined -> PFuser;
+		     true -> NFuser
+		  end,
+	      password =
+		  if NFpassword =:= undefined -> PFpassword;
+		     true -> NFpassword
+		  end}.
 
 -compile({nowarn_unused_function,merge_msg_RegResp/3}).
-merge_msg_RegResp(#'RegResp'{},
+merge_msg_RegResp(#'RegResp'{status = PFstatus},
 		  #'RegResp'{status = NFstatus}, _) ->
-    #'RegResp'{status = NFstatus}.
+    #'RegResp'{status =
+		   if NFstatus =:= undefined -> PFstatus;
+		      true -> NFstatus
+		   end}.
 
 -compile({nowarn_unused_function,merge_msg_LoginReq/3}).
-merge_msg_LoginReq(#'LoginReq'{},
+merge_msg_LoginReq(#'LoginReq'{user = PFuser,
+			       password = PFpassword},
 		   #'LoginReq'{user = NFuser, password = NFpassword}, _) ->
-    #'LoginReq'{user = NFuser, password = NFpassword}.
+    #'LoginReq'{user =
+		    if NFuser =:= undefined -> PFuser;
+		       true -> NFuser
+		    end,
+		password =
+		    if NFpassword =:= undefined -> PFpassword;
+		       true -> NFpassword
+		    end}.
+
+-compile({nowarn_unused_function,'merge_msg_loginResp.RoleInfo'/3}).
+'merge_msg_loginResp.RoleInfo'(#'loginResp.RoleInfo'{role_uid
+							 = PFrole_uid,
+						     role_name = PFrole_name,
+						     role_lv = PFrole_lv,
+						     profession = PFprofession,
+						     figure = PFfigure},
+			       #'loginResp.RoleInfo'{role_uid = NFrole_uid,
+						     role_name = NFrole_name,
+						     role_lv = NFrole_lv,
+						     profession = NFprofession,
+						     figure = NFfigure},
+			       _) ->
+    #'loginResp.RoleInfo'{role_uid =
+			      if NFrole_uid =:= undefined -> PFrole_uid;
+				 true -> NFrole_uid
+			      end,
+			  role_name =
+			      if NFrole_name =:= undefined -> PFrole_name;
+				 true -> NFrole_name
+			      end,
+			  role_lv =
+			      if NFrole_lv =:= undefined -> PFrole_lv;
+				 true -> NFrole_lv
+			      end,
+			  profession =
+			      if NFprofession =:= undefined -> PFprofession;
+				 true -> NFprofession
+			      end,
+			  figure =
+			      if NFfigure =:= undefined -> PFfigure;
+				 true -> NFfigure
+			      end}.
 
 -compile({nowarn_unused_function,merge_msg_loginResp/3}).
-merge_msg_loginResp(#loginResp{role_info = PFrole_info},
+merge_msg_loginResp(#loginResp{now_ms = PFnow_ms,
+			       role_info = PFrole_info},
 		    #loginResp{now_ms = NFnow_ms, role_info = NFrole_info},
 		    TrUserData) ->
-    #loginResp{now_ms = NFnow_ms,
+    #loginResp{now_ms =
+		   if NFnow_ms =:= undefined -> PFnow_ms;
+		      true -> NFnow_ms
+		   end,
 	       role_info =
 		   if PFrole_info /= undefined, NFrole_info /= undefined ->
 			  'erlang_++'(PFrole_info, NFrole_info, TrUserData);
 		      PFrole_info == undefined -> NFrole_info;
 		      NFrole_info == undefined -> PFrole_info
 		   end}.
-
--compile({nowarn_unused_function,merge_msg_RoleInfo/3}).
-merge_msg_RoleInfo(#'RoleInfo'{},
-		   #'RoleInfo'{role_uid = NFrole_uid,
-			       role_name = NFrole_name, role_lv = NFrole_lv,
-			       profession = NFprofession, figure = NFfigure},
-		   _) ->
-    #'RoleInfo'{role_uid = NFrole_uid,
-		role_name = NFrole_name, role_lv = NFrole_lv,
-		profession = NFprofession, figure = NFfigure}.
 
 
 verify_msg(Msg) when tuple_size(Msg) >= 1 ->
@@ -1104,10 +1262,10 @@ verify_msg(Msg, MsgName, Opts) ->
       'RegResp' -> v_msg_RegResp(Msg, [MsgName], TrUserData);
       'LoginReq' ->
 	  v_msg_LoginReq(Msg, [MsgName], TrUserData);
+      'loginResp.RoleInfo' ->
+	  'v_msg_loginResp.RoleInfo'(Msg, [MsgName], TrUserData);
       loginResp ->
 	  v_msg_loginResp(Msg, [MsgName], TrUserData);
-      'RoleInfo' ->
-	  v_msg_RoleInfo(Msg, [MsgName], TrUserData);
       _ -> mk_type_error(not_a_known_message, Msg, [])
     end.
 
@@ -1116,8 +1274,12 @@ verify_msg(Msg, MsgName, Opts) ->
 -dialyzer({nowarn_function,v_msg_RegReq/3}).
 v_msg_RegReq(#'RegReq'{user = F1, password = F2}, Path,
 	     TrUserData) ->
-    v_type_uint32(F1, [user | Path], TrUserData),
-    v_type_string(F2, [password | Path], TrUserData),
+    if F1 == undefined -> ok;
+       true -> v_type_uint32(F1, [user | Path], TrUserData)
+    end,
+    if F2 == undefined -> ok;
+       true -> v_type_string(F2, [password | Path], TrUserData)
+    end,
     ok;
 v_msg_RegReq(X, Path, _TrUserData) ->
     mk_type_error({expected_msg, 'RegReq'}, X, Path).
@@ -1126,7 +1288,10 @@ v_msg_RegReq(X, Path, _TrUserData) ->
 -dialyzer({nowarn_function,v_msg_RegResp/3}).
 v_msg_RegResp(#'RegResp'{status = F1}, Path,
 	      TrUserData) ->
-    v_type_uint32(F1, [status | Path], TrUserData), ok;
+    if F1 == undefined -> ok;
+       true -> v_type_uint32(F1, [status | Path], TrUserData)
+    end,
+    ok;
 v_msg_RegResp(X, Path, _TrUserData) ->
     mk_type_error({expected_msg, 'RegResp'}, X, Path).
 
@@ -1134,44 +1299,65 @@ v_msg_RegResp(X, Path, _TrUserData) ->
 -dialyzer({nowarn_function,v_msg_LoginReq/3}).
 v_msg_LoginReq(#'LoginReq'{user = F1, password = F2},
 	       Path, TrUserData) ->
-    v_type_uint32(F1, [user | Path], TrUserData),
-    v_type_string(F2, [password | Path], TrUserData),
+    if F1 == undefined -> ok;
+       true -> v_type_uint32(F1, [user | Path], TrUserData)
+    end,
+    if F2 == undefined -> ok;
+       true -> v_type_string(F2, [password | Path], TrUserData)
+    end,
     ok;
 v_msg_LoginReq(X, Path, _TrUserData) ->
     mk_type_error({expected_msg, 'LoginReq'}, X, Path).
+
+-compile({nowarn_unused_function,'v_msg_loginResp.RoleInfo'/3}).
+-dialyzer({nowarn_function,'v_msg_loginResp.RoleInfo'/3}).
+'v_msg_loginResp.RoleInfo'(#'loginResp.RoleInfo'{role_uid
+						     = F1,
+						 role_name = F2, role_lv = F3,
+						 profession = F4, figure = F5},
+			   Path, TrUserData) ->
+    if F1 == undefined -> ok;
+       true -> v_type_uint64(F1, [role_uid | Path], TrUserData)
+    end,
+    if F2 == undefined -> ok;
+       true ->
+	   v_type_string(F2, [role_name | Path], TrUserData)
+    end,
+    if F3 == undefined -> ok;
+       true -> v_type_uint32(F3, [role_lv | Path], TrUserData)
+    end,
+    if F4 == undefined -> ok;
+       true ->
+	   v_type_uint32(F4, [profession | Path], TrUserData)
+    end,
+    if F5 == undefined -> ok;
+       true -> v_type_uint32(F5, [figure | Path], TrUserData)
+    end,
+    ok;
+'v_msg_loginResp.RoleInfo'(X, Path, _TrUserData) ->
+    mk_type_error({expected_msg, 'loginResp.RoleInfo'}, X,
+		  Path).
 
 -compile({nowarn_unused_function,v_msg_loginResp/3}).
 -dialyzer({nowarn_function,v_msg_loginResp/3}).
 v_msg_loginResp(#loginResp{now_ms = F1, role_info = F2},
 		Path, TrUserData) ->
-    v_type_uint64(F1, [now_ms | Path], TrUserData),
+    if F1 == undefined -> ok;
+       true -> v_type_uint64(F1, [now_ms | Path], TrUserData)
+    end,
     if is_list(F2) ->
-	   _ = [v_msg_RoleInfo(Elem, [role_info | Path],
-			       TrUserData)
+	   _ = ['v_msg_loginResp.RoleInfo'(Elem,
+					   [role_info | Path], TrUserData)
 		|| Elem <- F2],
 	   ok;
        true ->
-	   mk_type_error({invalid_list_of, {msg, 'RoleInfo'}}, F2,
-			 [role_info | Path])
+	   mk_type_error({invalid_list_of,
+			  {msg, 'loginResp.RoleInfo'}},
+			 F2, [role_info | Path])
     end,
     ok;
 v_msg_loginResp(X, Path, _TrUserData) ->
     mk_type_error({expected_msg, loginResp}, X, Path).
-
--compile({nowarn_unused_function,v_msg_RoleInfo/3}).
--dialyzer({nowarn_function,v_msg_RoleInfo/3}).
-v_msg_RoleInfo(#'RoleInfo'{role_uid = F1,
-			   role_name = F2, role_lv = F3, profession = F4,
-			   figure = F5},
-	       Path, TrUserData) ->
-    v_type_uint64(F1, [role_uid | Path], TrUserData),
-    v_type_string(F2, [role_name | Path], TrUserData),
-    v_type_uint32(F3, [role_lv | Path], TrUserData),
-    v_type_uint32(F4, [profession | Path], TrUserData),
-    v_type_uint32(F5, [figure | Path], TrUserData),
-    ok;
-v_msg_RoleInfo(X, Path, _TrUserData) ->
-    mk_type_error({expected_msg, 'RoleInfo'}, X, Path).
 
 -compile({nowarn_unused_function,v_type_uint32/3}).
 -dialyzer({nowarn_function,v_type_uint32/3}).
@@ -1260,47 +1446,47 @@ cons(Elem, Acc, _TrUserData) -> [Elem | Acc].
 get_msg_defs() ->
     [{{msg, 'RegReq'},
       [#field{name = user, fnum = 1, rnum = 2, type = uint32,
-	      occurrence = required, opts = []},
+	      occurrence = optional, opts = []},
        #field{name = password, fnum = 2, rnum = 3,
-	      type = string, occurrence = required, opts = []}]},
+	      type = string, occurrence = optional, opts = []}]},
      {{msg, 'RegResp'},
       [#field{name = status, fnum = 1, rnum = 2,
-	      type = uint32, occurrence = required, opts = []}]},
+	      type = uint32, occurrence = optional, opts = []}]},
      {{msg, 'LoginReq'},
       [#field{name = user, fnum = 1, rnum = 2, type = uint32,
-	      occurrence = required, opts = []},
+	      occurrence = optional, opts = []},
        #field{name = password, fnum = 2, rnum = 3,
-	      type = string, occurrence = required, opts = []}]},
+	      type = string, occurrence = optional, opts = []}]},
+     {{msg, 'loginResp.RoleInfo'},
+      [#field{name = role_uid, fnum = 1, rnum = 2,
+	      type = uint64, occurrence = optional, opts = []},
+       #field{name = role_name, fnum = 2, rnum = 3,
+	      type = string, occurrence = optional, opts = []},
+       #field{name = role_lv, fnum = 3, rnum = 4,
+	      type = uint32, occurrence = optional, opts = []},
+       #field{name = profession, fnum = 4, rnum = 5,
+	      type = uint32, occurrence = optional, opts = []},
+       #field{name = figure, fnum = 5, rnum = 6, type = uint32,
+	      occurrence = optional, opts = []}]},
      {{msg, loginResp},
       [#field{name = now_ms, fnum = 1, rnum = 2,
-	      type = uint64, occurrence = required, opts = []},
+	      type = uint64, occurrence = optional, opts = []},
        #field{name = role_info, fnum = 2, rnum = 3,
-	      type = {msg, 'RoleInfo'}, occurrence = repeated,
-	      opts = []}]},
-     {{msg, 'RoleInfo'},
-      [#field{name = role_uid, fnum = 1, rnum = 2,
-	      type = uint64, occurrence = required, opts = []},
-       #field{name = role_name, fnum = 2, rnum = 3,
-	      type = string, occurrence = required, opts = []},
-       #field{name = role_lv, fnum = 3, rnum = 4,
-	      type = uint32, occurrence = required, opts = []},
-       #field{name = profession, fnum = 4, rnum = 5,
-	      type = uint32, occurrence = required, opts = []},
-       #field{name = figure, fnum = 5, rnum = 6, type = uint32,
-	      occurrence = required, opts = []}]}].
+	      type = {msg, 'loginResp.RoleInfo'},
+	      occurrence = repeated, opts = []}]}].
 
 
 get_msg_names() ->
-    ['RegReq', 'RegResp', 'LoginReq', loginResp,
-     'RoleInfo'].
+    ['RegReq', 'RegResp', 'LoginReq', 'loginResp.RoleInfo',
+     loginResp].
 
 
 get_group_names() -> [].
 
 
 get_msg_or_group_names() ->
-    ['RegReq', 'RegResp', 'LoginReq', loginResp,
-     'RoleInfo'].
+    ['RegReq', 'RegResp', 'LoginReq', 'loginResp.RoleInfo',
+     loginResp].
 
 
 get_enum_names() -> [].
@@ -1320,34 +1506,34 @@ fetch_enum_def(EnumName) ->
 
 find_msg_def('RegReq') ->
     [#field{name = user, fnum = 1, rnum = 2, type = uint32,
-	    occurrence = required, opts = []},
+	    occurrence = optional, opts = []},
      #field{name = password, fnum = 2, rnum = 3,
-	    type = string, occurrence = required, opts = []}];
+	    type = string, occurrence = optional, opts = []}];
 find_msg_def('RegResp') ->
     [#field{name = status, fnum = 1, rnum = 2,
-	    type = uint32, occurrence = required, opts = []}];
+	    type = uint32, occurrence = optional, opts = []}];
 find_msg_def('LoginReq') ->
     [#field{name = user, fnum = 1, rnum = 2, type = uint32,
-	    occurrence = required, opts = []},
+	    occurrence = optional, opts = []},
      #field{name = password, fnum = 2, rnum = 3,
-	    type = string, occurrence = required, opts = []}];
+	    type = string, occurrence = optional, opts = []}];
+find_msg_def('loginResp.RoleInfo') ->
+    [#field{name = role_uid, fnum = 1, rnum = 2,
+	    type = uint64, occurrence = optional, opts = []},
+     #field{name = role_name, fnum = 2, rnum = 3,
+	    type = string, occurrence = optional, opts = []},
+     #field{name = role_lv, fnum = 3, rnum = 4,
+	    type = uint32, occurrence = optional, opts = []},
+     #field{name = profession, fnum = 4, rnum = 5,
+	    type = uint32, occurrence = optional, opts = []},
+     #field{name = figure, fnum = 5, rnum = 6, type = uint32,
+	    occurrence = optional, opts = []}];
 find_msg_def(loginResp) ->
     [#field{name = now_ms, fnum = 1, rnum = 2,
-	    type = uint64, occurrence = required, opts = []},
+	    type = uint64, occurrence = optional, opts = []},
      #field{name = role_info, fnum = 2, rnum = 3,
-	    type = {msg, 'RoleInfo'}, occurrence = repeated,
-	    opts = []}];
-find_msg_def('RoleInfo') ->
-    [#field{name = role_uid, fnum = 1, rnum = 2,
-	    type = uint64, occurrence = required, opts = []},
-     #field{name = role_name, fnum = 2, rnum = 3,
-	    type = string, occurrence = required, opts = []},
-     #field{name = role_lv, fnum = 3, rnum = 4,
-	    type = uint32, occurrence = required, opts = []},
-     #field{name = profession, fnum = 4, rnum = 5,
-	    type = uint32, occurrence = required, opts = []},
-     #field{name = figure, fnum = 5, rnum = 6, type = uint32,
-	    occurrence = required, opts = []}];
+	    type = {msg, 'loginResp.RoleInfo'},
+	    occurrence = repeated, opts = []}];
 find_msg_def(_) -> error.
 
 
@@ -1416,16 +1602,16 @@ service_and_rpc_name_to_fqbins(S, R) ->
 fqbin_to_msg_name(<<"RegReq">>) -> 'RegReq';
 fqbin_to_msg_name(<<"RegResp">>) -> 'RegResp';
 fqbin_to_msg_name(<<"LoginReq">>) -> 'LoginReq';
+fqbin_to_msg_name(<<"loginResp.RoleInfo">>) -> 'loginResp.RoleInfo';
 fqbin_to_msg_name(<<"loginResp">>) -> loginResp;
-fqbin_to_msg_name(<<"RoleInfo">>) -> 'RoleInfo';
 fqbin_to_msg_name(E) -> error({gpb_error, {badmsg, E}}).
 
 
 msg_name_to_fqbin('RegReq') -> <<"RegReq">>;
 msg_name_to_fqbin('RegResp') -> <<"RegResp">>;
 msg_name_to_fqbin('LoginReq') -> <<"LoginReq">>;
+msg_name_to_fqbin('loginResp.RoleInfo') -> <<"loginResp.RoleInfo">>;
 msg_name_to_fqbin(loginResp) -> <<"loginResp">>;
-msg_name_to_fqbin('RoleInfo') -> <<"RoleInfo">>;
 msg_name_to_fqbin(E) -> error({gpb_error, {badmsg, E}}).
 
 
@@ -1467,8 +1653,8 @@ get_all_proto_names() -> ["login"].
 
 
 get_msg_containment("login") ->
-    ['LoginReq', 'RegReq', 'RegResp', 'RoleInfo',
-     loginResp];
+    ['LoginReq', 'RegReq', 'RegResp', loginResp,
+     'loginResp.RoleInfo'];
 get_msg_containment(P) ->
     error({gpb_error, {badproto, P}}).
 
@@ -1497,7 +1683,7 @@ get_proto_by_msg_name_as_fqbin(<<"loginResp">>) -> "login";
 get_proto_by_msg_name_as_fqbin(<<"RegResp">>) -> "login";
 get_proto_by_msg_name_as_fqbin(<<"RegReq">>) -> "login";
 get_proto_by_msg_name_as_fqbin(<<"LoginReq">>) -> "login";
-get_proto_by_msg_name_as_fqbin(<<"RoleInfo">>) -> "login";
+get_proto_by_msg_name_as_fqbin(<<"loginResp.RoleInfo">>) -> "login";
 get_proto_by_msg_name_as_fqbin(E) ->
     error({gpb_error, {badmsg, E}}).
 
