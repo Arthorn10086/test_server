@@ -1,5 +1,5 @@
 -module(file_monitor).
--author("yhw").
+-author("arthorn").
 
 -behaviour(gen_server).
 

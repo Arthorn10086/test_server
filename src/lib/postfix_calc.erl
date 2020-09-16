@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("cacl_lib").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([mid2postfix/1, calc_postfix/1, postfix_view/1]).

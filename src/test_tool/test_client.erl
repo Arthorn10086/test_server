@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("test_client").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([start_link/2, init/2]).

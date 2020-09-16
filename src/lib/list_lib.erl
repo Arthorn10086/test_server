@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("list_lib").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([merge_kv/2, get_value/4, foreach/3]).

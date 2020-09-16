@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("test_server_handler").
--author("yhw").
+-author("arthorn").
 -behaviour(cowboy_http_handler).
 %%%=======================EXPORT=======================
 -export([init/2, format/2]).

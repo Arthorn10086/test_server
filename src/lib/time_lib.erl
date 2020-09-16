@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("time_lib").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([now_second/0, now_millisecond/0, get_zero_second/0]).

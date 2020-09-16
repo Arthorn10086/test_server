@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("check_lib").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([check_all/4, get_bool_value/3]).

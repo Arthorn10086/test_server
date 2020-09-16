@@ -1,6 +1,6 @@
 -module(pb_lib).
 -description("test_protobuf").
--author("yhw").
+-author("arthorn").
 -vsn(1.0).
 
 %%%=======================EXPORT=======================

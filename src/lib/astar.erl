@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("astar").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([find/3]).

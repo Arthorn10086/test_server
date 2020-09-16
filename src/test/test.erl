@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("test").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([test_update/4, test_client/0, test_send/4, add/3]).

@@ -1,5 +1,5 @@
 -module(server_event).
--author("yhw").
+-author("arthorn").
 
 -behaviour(gen_server).
 

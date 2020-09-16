@@ -1,5 +1,5 @@
 -module(config_lib).
--author("yhw").
+-author("arthorn").
 
 -behaviour(gen_server).
 

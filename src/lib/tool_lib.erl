@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("tool_lib").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([decompile/1, rpc_load_mod/2, pstack/1, gc_all/0, tc/2]).

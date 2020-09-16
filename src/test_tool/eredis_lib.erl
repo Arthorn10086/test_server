@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("eredis_lib").
--author("yhw").
+-author("arthorn").
 -vsn(1.0).
 
 %%%=======================EXPORT=======================
@@ -40,6 +40,9 @@ async_command(Order, Params) ->
     async_command(?POOLNAME, Order, Params).
 async_command(PoolName, Order, Params) ->
     eredis_pool:q_async(PoolName, [Order | Params]).
+
+
+
 
 
 %%%===================LOCAL FUNCTIONS==================

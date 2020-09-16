@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("log_lib").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([info/2, error/2]).

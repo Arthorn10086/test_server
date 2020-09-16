@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("smtp_mail").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([init_mail/7, send/1, send_msg/3, recv_msg/3, send/3]).

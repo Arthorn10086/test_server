@@ -1,5 +1,5 @@
 -module(statistics_tool).
--author("yhw").
+-author("arthorn").
 
 -behaviour(gen_server).
 

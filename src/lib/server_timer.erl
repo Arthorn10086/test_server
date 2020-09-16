@@ -1,5 +1,5 @@
 -module(server_timer).
--author("yhw").
+-author("arthorn").
 
 -behaviour(gen_server).
 

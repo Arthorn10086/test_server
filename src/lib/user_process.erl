@@ -1,5 +1,5 @@
 -module(user_process).
--author("yhw").
+-author("arthorn").
 
 -behaviour(gen_server).
 -behaviour(ranch_protocol).

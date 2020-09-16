@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("map").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -compile(export_all).
