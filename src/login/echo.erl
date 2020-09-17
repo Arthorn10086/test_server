@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("echo").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([echo/4]).

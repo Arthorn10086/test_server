@@ -34,30 +34,27 @@ sync_cmd(UserName, Cmd, ReqRecord, PB, RespRecord) ->
 %% @end
 %% ----------------------------------------------------
 init(UserName, Password) ->
-    register(list_to_atom("test_client" ++ integer_to_list(UserName)), self()),
     {_, C} = gen_tcp:connect("localhost", 7621, [binary, {active, true}, {packet, 0}]),
-    gen_tcp:controlling_process(C, self()),
-    Serial = time_lib:now_millisecond(),
+    Serial = time_lib:now_second(),
     D = protocol_routing:encode(1001, Serial, login_pb:encode_msg({'LoginReq', UserName, Password})),
     gen_tcp:send(C, D),
     receive
         {tcp, _S, Reply} ->
-            R = protocol_routing:decode(Reply),
-            {_, S} = lists:keyfind("status", 1, R),
-            {_, Serial} = lists:keyfind("serial", 1, R),
-            {_, Data} = lists:keyfind("data", 1, R),
+            R = protocol_routing:decode_reply(Reply),
+            {_, S} = lists:keyfind(status, 1, R),
+            {_, Serial} = lists:keyfind(serial, 1, R),
+            {_, Data} = lists:keyfind(data, 1, R),
             if
                 S =:= 0 ->
                     erlang:send_after(60000, self(), 'echo'),
                     gen_server:enter_loop(?MODULE, [],
-                        #state{socket = C, wait_reply = [], ms = Serial}, 10000);
+                        #state{socket = C, wait_reply = [], ms = time_lib:now_millisecond()}, 10000);
                 true ->
-                    {false, Data}
+                    {false, binary_to_list(Data)}
             end
     end.
 handle_call({sync, Cmd, Args, PB, RespRecord}, From, #state{socket = C, wait_reply = L} = State) ->
-    lager:log(info, self(), {From}),
-    Serial = time_lib:now_millisecond(),
+    Serial = time_lib:now_second(),
     D = protocol_routing:encode(Cmd, Serial, PB:encode_msg(Args)),
     gen_tcp:send(C, D),
     NL = [{Serial, PB, RespRecord, ?MODULE, call_rec, [{from, From}]} | L],
@@ -71,12 +68,10 @@ handle_info(echo, #state{socket = C, wait_reply = L} = State) ->
     gen_tcp:send(C, D),
     {noreply, State#state{wait_reply = [{-1, echo_pb, 'HeartBeatResp', ?MODULE, echo_rcv, []} | L]}};
 handle_info({tcp, _S, Reply}, #state{wait_reply = L} = State) ->
-    lager:log(info, self(), {Reply, L}),
-    R = protocol_routing:decode(Reply),
-    lager:log(info, self(), {R}),
-    {_, S} = lists:keyfind("status", 1, R),
-    {_, Serial} = lists:keyfind("serial", 1, R),
-    {_, Data} = lists:keyfind("data", 1, R),
+    R = protocol_routing:decode_reply(Reply),
+    {_, S} = lists:keyfind(status, 1, R),
+    {_, Serial} = lists:keyfind(serial, 1, R),
+    {_, Data} = lists:keyfind(data, 1, R),
     NState = case lists:keyfind(Serial, 1, L) of
         false ->
             State;
@@ -87,7 +82,7 @@ handle_info({tcp, _S, Reply}, #state{wait_reply = L} = State) ->
                     StateT = CakkBackM:CallBackF(State, A, Pb:decode_msg(Data, Record)),
                     StateT#state{wait_reply = NL};
                 true ->
-                    io:format("Error:~p~n", [Data]),
+                    io:format("Error:~p~n", [binary_to_list(Data)]),
                     State#state{wait_reply = NL}
             end
     end,
@@ -99,7 +94,5 @@ terminate(_Reason, _State) ->
 echo_rev(State, _A, RespRecord) ->
     State#state{ms = element(2, RespRecord)}.
 call_rec(State, [{from, From}], RespRecord) ->
-    lager:log(info, self(), {call_rec, From}),
-    io:format("~p~n", [RespRecord]),
     gen_server:reply(From, RespRecord),
     State.

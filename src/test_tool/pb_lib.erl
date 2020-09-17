@@ -1,5 +1,5 @@
 -module(pb_lib).
--description("test_protobuf").
+-description("pb_lib").
 -author("arthorn").
 -vsn(1.0).
 

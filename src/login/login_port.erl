@@ -2,7 +2,7 @@
 
 %%%=======================STATEMENT====================
 -description("login_port").
--author("yhw").
+-author("arthorn").
 
 %%%=======================EXPORT=======================
 -export([login/4, check/3]).

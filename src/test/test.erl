@@ -5,7 +5,7 @@
 -author("arthorn").
 
 %%%=======================EXPORT=======================
--export([test_update/4, test_client/0, test_send/4, add/3]).
+-export([test_update/4, test_client/0, test_send/4, add/3, try_apply/3]).
 
 %%%=======================INCLUDE======================
 
@@ -18,6 +18,16 @@
 
 
 %%%=================EXPORTED FUNCTIONS=================
+
+try_apply(M, F, A) ->
+    try
+        apply(M, F, A)
+    catch
+        E1 :E2 ->
+            io:format("~p~n", [{E1, E2, erlang:get_stacktrace()}])
+    end.
+
+
 %% ----------------------------------------------------
 %% @doc  
 %%        

@@ -6,7 +6,7 @@
 
 
 %%%=======================EXPORT=======================
--export([encode/3, decode/1, encode_reply/4, route/1, try_run/3]).
+-export([encode/3, decode/1, encode_reply/4, decode_reply/1, route/1, try_run/3]).
 
 %%%=======================INCLUDE======================
 
@@ -33,26 +33,34 @@
 %%encode_reply(ok, Serial, Data, PbMod) ->
 %%    jsx:encode([{<<"status">>, 0}, {<<"serial">>, Serial}, {<<"data">>, PbMod:encode_msg(Data)}]).
 
-encode(Protocol, Serial, Data) ->
+encode(Protocol, Serial, Msg) ->
     B1 = term_to_binary(Protocol),
-    B2 = term_to_binary(Serial),
     BZ1 = byte_size(B1),
-    BZ2 = byte_size(B2),
-    <<BZ1:16/integer, B1/binary, BZ2:8/integer, B2/binary, Data/binary>>.
+    BZ2 = byte_size(Msg),
+    Data = <<Serial:32, BZ1:16/integer, B1/binary, BZ2:16, Msg/binary>>,
+    Size = byte_size(Data),
+    <<Size:16, Data/binary>>.
 
-decode(<<BZ1:16, Protocol:BZ1/binary, BZ2:8, Serial:BZ2/binary, Rest/binary>>) ->
-    [{'protocol', binary_to_term(Protocol)}, {'serial', binary_to_term(Serial)}, {'data', Rest}].
+decode(<<Size:16, Data:Size/binary, _T/binary>>) ->
+    <<Serial:32, BZ1:16, Protocol:BZ1/binary, BZ2:16, Msg:BZ2/binary>> = Data,
+    [{'protocol', binary_to_term(Protocol)}, {'serial', Serial}, {'data', Msg}].
 
 %%|<-(8位 状态码)->|<-(32位 流水号)->|<- Reply ->|
-encode_reply(Status, Serial, Data, PbMod) ->
+encode_reply(Status, Serial, Reply, PbMod) ->
     {B1, B3} = case Status of
         'error' ->
-            {1, term_to_binary(Data)};
+            {1, term_to_binary(Reply)};
         'ok' ->
-            {0, PbMod:encode_msg(Data)}
+            {0, PbMod:encode_msg(Reply)}
     end,
-    <<B1:8/integer, Serial:32/integer, B3/binary>>.
+    BZ3 = byte_size(B3),
+    Data = <<Serial:32/integer, B1:8/integer, BZ3:16, B3/binary>>,
+    Size = byte_size(Data),
+    <<Size:16, Data/binary>>.
 
+decode_reply(<<Size:16, Data:Size/binary, _T/binary>>) ->
+    <<Serial:32, Status:8, BZ2:16, Reply:BZ2/binary>> = Data,
+    [{'serial', Serial}, {'status', Status}, {'data', Reply}].
 
 %% ----------------------------------------------------
 %% @doc  
@@ -65,7 +73,7 @@ route(Bin) ->
         {_, Cmd} = lists:keyfind('protocol', 1, R),
         {_, Serial} = lists:keyfind('serial', 1, R),
         {_, Data} = lists:keyfind('data', 1, R),
-        {_, MFAList, ErrorLog, {PbMod, Req}, Timeout} = config_lib:get('tcp_protocol', Cmd),
+        {_, MFAList, ErrorLog, {PbMod, Req, _Resp}, Timeout} = config_lib:get('tcp_protocol', Cmd),
         Data1 = PbMod:decode_msg(Data, Req),
         statistics_protocol(Cmd),
         {Data1, Serial, MFAList, ErrorLog, PbMod, Timeout}
@@ -105,6 +113,7 @@ try_run(Session, Attr, {Data, Serial, MFAList, {LogM, LogF, _}, PbMod, _}) ->
         ModifyAttr
     catch
         E1:E2 ->
+            io:format("=~p~n", [{?MODULE, ?LINE, E1, E2}]),
             LogM:LogF(self(), lager:pr_stacktrace(erlang:get_stacktrace(), {E1, E2})),
             Error = encode_reply(error, Serial, erlang:get_stacktrace(), PbMod),
             user_process:send(Session, Error)

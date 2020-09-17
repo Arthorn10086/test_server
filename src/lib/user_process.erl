@@ -98,6 +98,7 @@ handle_info({'DOWN', _Ref, 'process', Pid, _Reason}, #state{req_queue = Queue, c
 
 %%socket断开
 handle_info({tcp_closed, _Socket}, State) ->
+    server_event:inform({player, tcp_closed}, {stop, State}),
     {stop, tcp_closed, State};
 
 %%attr变化
@@ -110,6 +111,7 @@ handle_info(timeout, State) ->
 
 %%指定时间没有收到心跳,结束
 handle_info({timeout, Ref, 'echo_timeout'}, #state{timeout_ref = Ref} = State) ->
+    server_event:inform({player, tcp_closed}, {echo_timeout, State}),
     {stop, death, State};
 
 %%当前请求执行超时
