@@ -6,6 +6,7 @@
 
 %%%=======================EXPORT=======================
 -export([test_update/4, test_client/0, test_send/4, add/3, try_apply/3]).
+-export([rqps/2]).
 
 %%%=======================INCLUDE======================
 
@@ -102,9 +103,58 @@ add(_, Q, Msg) ->
     B = list_to_integer(list_lib:get_value("b", 1, Msg, "0")),
     {ok, Q, [{reply, A + B}]}.
 
+
+
+rqps(QNum, PNum) ->
+    eredis_lib:sync_command("CONFIG",["RESETSTAT"]),
+    PQNum = QNum div PNum,
+    PQList = lists:foldl(fun(PIndex, R) ->
+        SIndex = PQNum * (PIndex - 1) + 1,
+        EIndex = PQNum * PIndex,
+        [lists:seq(SIndex, EIndex) | R]
+    end, [], lists:seq(1, PNum)),
+    From = self(),
+    erlang:send_after(100, self(), time_out1),
+    PidL = lists:foldl(fun(QL, R) ->
+        Pid = spawn(fun() ->
+            lists:foreach(fun(I) ->
+                eredis_lib:sync_command("GET", [I])
+            end, QL),
+            timer:sleep(200),
+            From ! {self(), over}
+        end),
+        [Pid | R]
+    end, [], PQList),
+    loop("./rqps.txt", PidL),
+    ok.
+
+
+
 %%%===================LOCAL FUNCTIONS==================
 %% ----------------------------------------------------
 %% @doc  
 %%  
 %% @end
 %% ----------------------------------------------------
+loop(F, PidL) ->
+    receive
+        time_out1 ->
+            erlang:send_after(100, self(), time_out1),
+            spawn(fun() ->
+                B = element(2, eredis_lib:sync_command("INFO", [stats])),
+                %%lists:nth(3, binary:split(B, <<"\r\n">>, [global]))
+                file:write_file(F, B, [append]),
+                file:write_file(F, <<"\r\n">>, [append])
+            end),
+            loop(F, PidL);
+        {Pid, over} ->
+            case lists:delete(Pid, PidL) of
+                [] ->
+                    receive
+                        _ ->
+                            ok
+                    end;
+                L1 ->
+                    loop(F, L1)
+            end
+    end.
