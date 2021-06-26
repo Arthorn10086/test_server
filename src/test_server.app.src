@@ -14,7 +14,7 @@
                 cowboy,
                 eredis_pool
             ]},
-        {env, [{http_port, 8081}, {cfg_path, "./config"}, {tcp_port, 7621}, {db_cache_tactics, write_behind}]},
+        {env, [{http_port, 8088}, {cfg_path, "./config"}, {tcp_port, 7631}, {db_cache_tactics, write_behind}]},
         {modules, []},
 
         {licenses, ["Apache 2.0"]},

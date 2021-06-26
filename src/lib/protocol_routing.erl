@@ -113,7 +113,6 @@ try_run(Session, Attr, {Data, Serial, MFAList, {LogM, LogF, _}, PbMod, _}) ->
         ModifyAttr
     catch
         E1:E2 ->
-            io:format("=~p~n", [{?MODULE, ?LINE, E1, E2}]),
             LogM:LogF(self(), lager:pr_stacktrace(erlang:get_stacktrace(), {E1, E2})),
             Error = encode_reply(error, Serial, erlang:get_stacktrace(), PbMod),
             user_process:send(Session, Error)

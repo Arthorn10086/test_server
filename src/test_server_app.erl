@@ -24,6 +24,7 @@ start(_StartType, _StartArgs) ->
             {"/[...]", test_server_handler, []}
         ]}
     ],
+
     Dispatch = cowboy_router:compile(Routes),
     {ok, _} = cowboy:start_clear(http, [{port, HttpPort}], #{env =>#{dispatch => Dispatch}}),
     test_server_sup:start_link().

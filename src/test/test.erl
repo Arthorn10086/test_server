@@ -6,7 +6,7 @@
 
 %%%=======================EXPORT=======================
 -export([test_update/4, test_client/0, test_send/4, add/3, try_apply/3]).
--export([rqps/2]).
+-export([rdb/1, rqps/2]).
 
 %%%=======================INCLUDE======================
 
@@ -105,8 +105,17 @@ add(_, Q, Msg) ->
 
 
 
+
+
+rdb(0) ->
+    ok;
+rdb(N) ->
+    eredis_lib:sync_command("SET", [N, a]),
+    rdb(N - 1).
+
+
 rqps(QNum, PNum) ->
-    eredis_lib:sync_command("CONFIG",["RESETSTAT"]),
+    eredis_lib:sync_command("CONFIG", ["RESETSTAT"]),
     PQNum = QNum div PNum,
     PQList = lists:foldl(fun(PIndex, R) ->
         SIndex = PQNum * (PIndex - 1) + 1,
@@ -120,14 +129,13 @@ rqps(QNum, PNum) ->
             lists:foreach(fun(I) ->
                 eredis_lib:sync_command("GET", [I])
             end, QL),
-            timer:sleep(200),
+            timer:sleep(20),
             From ! {self(), over}
         end),
         [Pid | R]
     end, [], PQList),
     loop("./rqps.txt", PidL),
     ok.
-
 
 
 %%%===================LOCAL FUNCTIONS==================
@@ -158,3 +166,7 @@ loop(F, PidL) ->
                     loop(F, L1)
             end
     end.
+
+
+
+
