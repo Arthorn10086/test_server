@@ -8,11 +8,12 @@
                 kernel,
                 stdlib,
                 sasl,
+                mysql_poolboy,
                 erl_gs_db,
                 lager,
                 cowboy
             ]},
-        {env, [{http_port, 8088}, {cfg_path, "./config"}, {tcp_port, 7631}, {db_cache_tactics, write_behind}]},
+        {env, []},
         {modules, []},
 
         {licenses, ["Apache 2.0"]},
