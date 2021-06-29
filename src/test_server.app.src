@@ -9,10 +9,8 @@
                 stdlib,
                 sasl,
                 erl_gs_db,
-                ranch,
                 lager,
-                cowboy,
-                eredis_pool
+                cowboy
             ]},
         {env, [{http_port, 8088}, {cfg_path, "./config"}, {tcp_port, 7631}, {db_cache_tactics, write_behind}]},
         {modules, []},
